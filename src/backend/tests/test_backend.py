@@ -219,13 +219,15 @@ def test_apply_schedule_with_dict_and_model():
     assert port_repo.optimization_runs[run_id]["applied"] is True
 
     # Test re-applying with dict items (simulating rows loaded from PostgreSQL)
+    v_id = next(iter(port_repo.vessels.keys()))
+    b_id = next(iter(port_repo.berths.keys()))
     run_dict = dict(port_repo.optimization_runs[run_id])
     run_dict["schedules"] = [
         {
             "id": "test-sched-1",
             "optimization_run_id": run_id,
-            "vessel_id": "f0000003-0000-0000-0000-000000000003",
-            "berth_id": "b0000004-0000-0000-0000-000000000004",
+            "vessel_id": v_id,
+            "berth_id": b_id,
             "waiting_time": 1.5,
             "duration_hours": 6.0,
             "vessel_name": "Maersk Mc-Kinney Moller",
@@ -242,7 +244,7 @@ def test_apply_schedule_with_dict_and_model():
     port_repo.optimization_runs["dict-run-test"] = run_dict
     res_dict_apply = client.post("/api/optimization/apply", json={"run_id": "dict-run-test"}, headers={"Authorization": f"Bearer {admin_token}"})
     assert res_dict_apply.status_code == 200
-    assert port_repo.vessels["f0000003-0000-0000-0000-000000000003"]["assigned_berth_id"] == "b0000004-0000-0000-0000-000000000004"
+    assert port_repo.vessels[v_id]["assigned_berth_id"] == b_id
 
 
 def test_optimizer_timezone_and_empty_berths():

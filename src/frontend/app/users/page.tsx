@@ -21,7 +21,6 @@ import {
   Trash2,
   Copy,
   Key,
-  RefreshCw,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardHeader, CardTitle, CardContent } from "@/design-system/card";
@@ -47,7 +46,7 @@ export default function UsersPage() {
   const confirm = useConfirm();
 
   // ── Password storage & visibility state ──
-  const [userPasswords, setUserPasswords] = useState<Record<string, string>>({
+  const [savedPasswords, setSavedPasswords] = useState<Record<string, string>>({
     "admin@naviops.port": "admin123",
     "ops@naviops.port": "admin123",
     "executive@naviops.port": "admin123",
@@ -96,20 +95,20 @@ export default function UsersPage() {
         } catch (e) {}
       }
 
-      // Load persisted user passwords
-      const savedPasswords = localStorage.getItem("naviops_saved_passwords");
-      if (savedPasswords) {
+      // Load persisted credentials for created users
+      const stored = localStorage.getItem("naviops_user_passwords");
+      if (stored) {
         try {
-          const parsedPass = JSON.parse(savedPasswords);
-          setUserPasswords((prev) => ({ ...prev, ...parsedPass }));
+          const parsed = JSON.parse(stored);
+          setSavedPasswords((prev) => ({ ...prev, ...parsed }));
         } catch (e) {}
       }
     }
     fetchUsersData();
   }, []);
 
-  const saveUserPassword = (userId: string, email: string, pass: string) => {
-    setUserPasswords((prev) => {
+  const saveUserCredential = (userId: string, email: string, pass: string) => {
+    setSavedPasswords((prev) => {
       const updated = {
         ...prev,
         [userId]: pass,
@@ -117,15 +116,21 @@ export default function UsersPage() {
       };
       try {
         if (typeof window !== "undefined") {
-          localStorage.setItem("naviops_saved_passwords", JSON.stringify(updated));
+          localStorage.setItem("naviops_user_passwords", JSON.stringify(updated));
         }
       } catch (e) {}
       return updated;
     });
   };
 
-  const getEffectivePassword = (user: User) => {
-    return userPasswords[user.id] || userPasswords[user.email.toLowerCase()] || "admin123";
+  const getDisplayPassword = (user: User) => {
+    const emailKey = user.email.toLowerCase();
+    if (savedPasswords[user.id]) return savedPasswords[user.id];
+    if (savedPasswords[emailKey]) return savedPasswords[emailKey];
+    if (emailKey === "admin@naviops.port" || emailKey === "ops@naviops.port" || emailKey === "executive@naviops.port") {
+      return "admin123";
+    }
+    return "Set upon creation";
   };
 
   const copyToClipboard = (text: string, fieldId: string, label: string) => {
@@ -147,7 +152,7 @@ export default function UsersPage() {
     setPasswordUpdateError(null);
     try {
       await api.updateUserPassword(userId, cleanPass);
-      saveUserPassword(userId, email, cleanPass);
+      saveUserCredential(userId, email, cleanPass);
       toast.success("Password Updated", "User password has been updated and saved.");
       setIsResettingPassword(false);
       setNewPasswordInput("");
@@ -222,8 +227,8 @@ export default function UsersPage() {
         role: createRole,
       });
 
-      // Save credentials for immediate visibility in profile
-      saveUserPassword(newUser.id, cleanEmail, cleanPassword);
+      // Save user credentials so the admin can view and copy them
+      saveUserCredential(newUser.id, cleanEmail, cleanPassword);
 
       // Re-fetch users from database to ensure persistence
       await fetchUsersData();
@@ -749,7 +754,7 @@ export default function UsersPage() {
             setPasswordUpdateError(null);
           }}
           title="Personnel Profile & Operational Credentials"
-          description="View sign-in credentials, update access passwords, and review live operational privileges."
+          description="View personnel details, manage access credentials, and review live operational privileges."
           maxWidth="md"
         >
           <div className="space-y-4 pt-1">
@@ -799,10 +804,10 @@ export default function UsersPage() {
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-[#102A27]">
-                      Sign-In & Account Credentials
+                      Sign-In &amp; Account Credentials
                     </h4>
                     <p className="text-[10px] text-[#5C6B68]">
-                      Provide these credentials to personnel for authentication.
+                      Account identity and operational credentials.
                     </p>
                   </div>
                 </div>
@@ -810,16 +815,16 @@ export default function UsersPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const pass = getEffectivePassword(selectedUser);
-                    const portalUrl = typeof window !== "undefined" ? `${window.location.origin}/auth/signin` : "/auth/signin";
-                    const credText = `NaviOps Port Orchestration Portal Credentials\n• User Name: ${selectedUser.full_name}\n• Email / Login ID: ${selectedUser.email}\n• Password: ${pass}\n• Role: ${selectedUser.role.toUpperCase()}\n• Department: ${selectedUser.department || "Port Operations"}\n• Sign-In URL: ${portalUrl}`;
+                    const pass = getDisplayPassword(selectedUser);
+                    const portalUrl = typeof window !== "undefined" ? `${window.location.origin}/login` : "/login";
+                    const credText = `NaviOps Port Orchestration Portal Credentials\n• Personnel Name: ${selectedUser.full_name}\n• Email / Login ID: ${selectedUser.email}\n• Password: ${pass}\n• Assigned Role: ${selectedUser.role.toUpperCase()}\n• Department: ${selectedUser.department || "Port Operations"}\n• Sign-In URL: ${portalUrl}`;
                     copyToClipboard(credText, "all", "All credentials");
                   }}
                   className="h-7 px-2.5 text-[11px] font-semibold gap-1 text-[#004741] border-[#A2D9D1] bg-white hover:bg-[#E1EFEC]"
                 >
                   {copiedField === "all" ? (
                     <>
-                      <Check className="h-3 w-3 text-emerald-600" /> Copied All!
+                      <Check className="h-3 w-3 text-emerald-600" /> Copied Details!
                     </>
                   ) : (
                     <>
@@ -878,15 +883,15 @@ export default function UsersPage() {
                   </button>
                 </div>
 
-                {/* Password */}
+                {/* Password - Viewable / Toggleable & Copyable */}
                 <div className="bg-white px-3 py-2 rounded-lg border border-[#E3E5E0]">
                   <div className="flex items-center justify-between">
                     <div className="min-w-0 flex-1">
                       <span className="text-[10px] uppercase font-bold text-[#899491] block">
                         Password
                       </span>
-                      <span className="font-mono text-xs font-bold text-[#102A27] tracking-wider block">
-                        {showPassword ? getEffectivePassword(selectedUser) : "••••••••••••"}
+                      <span className="font-mono text-xs font-bold text-[#102A27] tracking-wider block mt-0.5">
+                        {showPassword ? getDisplayPassword(selectedUser) : "••••••••••••"}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -900,7 +905,7 @@ export default function UsersPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(getEffectivePassword(selectedUser), "password", "Password")}
+                        onClick={() => copyToClipboard(getDisplayPassword(selectedUser), "password", "Password")}
                         className="p-1.5 text-[#5C6B68] hover:text-[#004741] hover:bg-[#F0FAF7] rounded transition-colors"
                         title="Copy Password"
                       >
@@ -938,7 +943,7 @@ export default function UsersPage() {
                       )}
                       <div className="flex items-center gap-2">
                         <input
-                          type="text"
+                          type="password"
                           placeholder="Enter new password (min 6 chars)"
                           value={newPasswordInput}
                           onChange={(e) => setNewPasswordInput(e.target.value)}

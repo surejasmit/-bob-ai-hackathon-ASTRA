@@ -13,6 +13,12 @@ from app.models.schemas import (
     SentinelAlertItem
 )
 
+import logging
+from app.core.config import settings
+from app.core.database import port_repo, clean_row, SyncedTable
+
+logger = logging.getLogger("naviops.disruptions")
+
 router = APIRouter(prefix="/api/disruptions", tags=["Disruptions"])
 
 
@@ -21,7 +27,23 @@ def get_all_disruptions(
     status: Optional[str] = None,
     current_user: UserResponse = Depends(get_current_user)
 ):
-    """List operational disruptions and incident logs"""
+    """
+    List operational disruptions and incident logs (Read-Only).
+    Strictly reads existing database records without creating, seeding, or modifying data.
+    """
+    if port_repo.is_connected or settings.clean_database_url:
+        try:
+            conn = port_repo.get_connection()
+            if conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT * FROM disruptions")
+                    db_disruptions = [clean_row(r) for r in cur.fetchall()]
+                    port_repo.disruptions.clear()
+                    for d in db_disruptions:
+                        super(SyncedTable, port_repo.disruptions).__setitem__(d["id"], d)
+        except Exception as e:
+            logger.warning(f"Failed to refresh disruptions from PostgreSQL: {e}")
+
     disruptions = list(port_repo.disruptions.values())
     if status:
         disruptions = [d for d in disruptions if d.get("status", "").lower() == status.lower()]

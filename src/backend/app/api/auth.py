@@ -69,9 +69,8 @@ def login(req: LoginRequest):
             detail="Invalid email or password."
         )
 
-    # Verify password (also allow case-tolerant 'admin123' for pre-seeded demo accounts)
-    is_demo_account = user_match.get("email") in ("admin@naviops.port", "ops@naviops.port", "executive@naviops.port")
-    password_valid = verify_password(req.password, password_hash) or (is_demo_account and req.password.strip().lower() == "admin123")
+    # Cryptographic password verification (PBKDF2-HMAC-SHA256)
+    password_valid = verify_password(req.password, password_hash)
 
     if not password_valid:
         raise HTTPException(

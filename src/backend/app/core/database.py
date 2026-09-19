@@ -276,7 +276,7 @@ class PortRepository:
                     pass
                 self._conn = None
 
-        self._conn = psycopg.connect(url, row_factory=dict_row, autocommit=True)
+        self._conn = psycopg.connect(url, row_factory=dict_row, autocommit=True, prepare_threshold=None)
         return self._conn
 
     def connect_and_sync(self):
@@ -347,13 +347,12 @@ class PortRepository:
                         for v in db_vessels:
                             super(SyncedTable, self.vessels).__setitem__(v["id"], v)
 
-                    # Disruptions
+                    # Disruptions (loaded strictly from existing database records)
                     cur.execute("SELECT * FROM disruptions")
                     db_disruptions = [clean_row(r) for r in cur.fetchall()]
-                    if db_disruptions:
-                        self.disruptions.clear()
-                        for d in db_disruptions:
-                            super(SyncedTable, self.disruptions).__setitem__(d["id"], d)
+                    self.disruptions.clear()
+                    for d in db_disruptions:
+                        super(SyncedTable, self.disruptions).__setitem__(d["id"], d)
 
                     # Schedules
                     cur.execute("SELECT * FROM schedules")
@@ -518,8 +517,13 @@ class PortRepository:
             raise RuntimeError(f"Database batch write failed for {table_name}: {e}") from e
 
     def delete_item(self, table_name: str, item_id: str):
-        """Delete a record from Supabase PostgreSQL."""
-        if not self.is_connected or not settings.clean_database_url or table_name not in TABLE_COLUMNS:
+        """Delete a single specific record from Supabase PostgreSQL by its primary key ID."""
+        if not item_id or not isinstance(item_id, (str, int, uuid.UUID)):
+            logger.warning(f"delete_item rejected invalid item_id={item_id} for table={table_name}")
+            return
+
+        clean_id = str(item_id).strip()
+        if not clean_id or not self.is_connected or not settings.clean_database_url or table_name not in TABLE_COLUMNS:
             return
 
         try:
@@ -527,13 +531,19 @@ class PortRepository:
             if not conn:
                 return
             with conn.cursor() as cur:
-                cur.execute(f"DELETE FROM {table_name} WHERE id = %s", (item_id,))
+                cur.execute(f"DELETE FROM {table_name} WHERE id = %s", (clean_id,))
         except Exception as e:
-            logger.error(f"Error deleting from {table_name}: {e}")
-            raise RuntimeError(f"Database delete failed for {table_name}: {e}") from e
+            logger.error(f"Error deleting record {clean_id} from {table_name}: {e}")
+            raise RuntimeError(f"Database delete failed for {table_name} (id={clean_id}): {e}") from e
 
     def reset_all_data(self):
-        """Pristine reset: clear all in-memory tables and reseed defaults."""
+        """Reset in-memory tables and re-sync from persistent store without bulk deleting remote databases."""
+        if self.is_connected:
+            # When connected to live PostgreSQL, safely re-sync state rather than dropping production tables
+            logger.info("Live database connected — re-synchronizing repository state from PostgreSQL.")
+            self.connect_and_sync()
+            return
+
         self.users.clear()
         self.berths.clear()
         self.cranes.clear()
@@ -542,18 +552,6 @@ class PortRepository:
         self.disruptions.clear()
         self.optimization_runs.clear()
         self.schedules.clear()
-
-        # Also clear PostgreSQL tables so seed data doesn't duplicate existing rows
-        if self.is_connected:
-            try:
-                conn = self.get_connection()
-                if conn:
-                    with conn.cursor() as cur:
-                        for table in ["schedules", "optimization_runs", "disruptions", "vessels", "yards", "cranes", "berths"]:
-                            cur.execute(f"DELETE FROM {table}")
-            except Exception as e:
-                logger.error(f"Failed to clear PostgreSQL during reset: {e}")
-
         self.seed_defaults()
 
     def seed_defaults(self):
@@ -657,51 +655,9 @@ class PortRepository:
         for v in vessels_seed:
             super(SyncedTable, self.vessels).__setitem__(v["id"], v)
 
-        # 6. Disruptions — only seed if no disruptions exist in database
-        if len(self.disruptions) == 0:
-            disruptions_seed = [
-                {
-                    "id": "d0000001-0000-0000-0000-000000000001",
-                    "disruption_type": "Equipment Failure",
-                    "title": "CR-04 Hydraulic Hoist Failure",
-                    "description": "Quay crane CR-04 experienced primary hoist hydraulic seal breach during high-speed hoist cycle. Engineering team dispatched.",
-                    "affected_resource_type": "crane",
-                    "affected_resource_id": "c0000004-0000-0000-0000-000000000004",
-                    "severity": "High",
-                    "start_time": now - timedelta(hours=3),
-                    "end_time": now + timedelta(hours=25),
-                    "status": "Active",
-                    "created_at": now - timedelta(hours=3)
-                },
-                {
-                    "id": "d0000002-0000-0000-0000-000000000002",
-                    "disruption_type": "Berth Maintenance",
-                    "title": "Berth B-02 High-Impact Fender Replacement",
-                    "description": "Structural refurbishment of marine pneumatic rubber fenders along section 4 of Berth B-02. Berthing suspended.",
-                    "affected_resource_type": "berth",
-                    "affected_resource_id": "b0000002-0000-0000-0000-000000000002",
-                    "severity": "Critical",
-                    "start_time": now - timedelta(hours=6),
-                    "end_time": now + timedelta(hours=18),
-                    "status": "Active",
-                    "created_at": now - timedelta(hours=6)
-                },
-                {
-                    "id": "d0000003-0000-0000-0000-000000000003",
-                    "disruption_type": "Weather",
-                    "title": "Heavy Outer Fog & Channel Speed Restriction",
-                    "description": "Harbor pilotage restricted navigation speed to 6 knots in outer fairway due to dense advection fog.",
-                    "affected_resource_type": "port",
-                    "affected_resource_id": None,
-                    "severity": "Medium",
-                    "start_time": now - timedelta(hours=2),
-                    "end_time": now + timedelta(hours=8),
-                    "status": "Active",
-                    "created_at": now - timedelta(hours=2)
-                }
-            ]
-            for d in disruptions_seed:
-                super(SyncedTable, self.disruptions).__setitem__(d["id"], d)
+        # 6. Disruptions are NEVER seeded automatically on startup.
+        # Existing database records are the sole source of truth.
+        pass
 
 
 # Global singleton repository instance

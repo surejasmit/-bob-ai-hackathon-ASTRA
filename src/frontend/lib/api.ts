@@ -283,10 +283,10 @@ export const api = {
     fetchWithAuth<void>(`/api/copilot/conversations/${id}`, { method: "DELETE" }),
 
   // Auth & Personnel Directory
-  login: (email: string, password?: string) =>
+  login: (email: string, password: string) =>
     fetchWithAuth<{ token: string; user: User }>("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email: email.trim(), password: password || "admin123" }),
+      body: JSON.stringify({ email: email.trim(), password }),
     }),
   getMe: () => fetchWithAuth<User>("/api/auth/me"),
   getUsers: () => fetchWithAuth<User[]>("/api/auth/users"),

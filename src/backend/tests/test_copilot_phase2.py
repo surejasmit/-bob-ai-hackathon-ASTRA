@@ -1,5 +1,5 @@
 """
-NaviOps Bob Copilot — Phase 2 Tool Calling Tests
+NaviOps Bob AI — Phase 2 Tool Calling Tests
 
 Tests cover:
 1.  Tool layer: individual tool executions with live in-memory data

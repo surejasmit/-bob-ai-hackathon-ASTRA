@@ -54,11 +54,11 @@ export function Modal({
       {/* Modal Dialog */}
       <div
         className={cn(
-          "relative w-full rounded-2xl bg-white border border-[#E3E5E0] p-6 shadow-card-md transition-all z-10 modal-dialog",
+          "relative w-full rounded-2xl bg-white border border-[#E3E5E0] p-6 shadow-card-md transition-all z-10 modal-dialog max-h-[90vh] flex flex-col overflow-hidden",
           maxWidthClasses
         )}
       >
-        <div className="flex items-start justify-between pb-3 border-b border-[#F0EDE4]">
+        <div className="flex items-start justify-between pb-3 border-b border-[#F0EDE4] shrink-0">
           <div>
             <h2 className="text-base font-semibold text-[#102A27]">{title}</h2>
             {description && (
@@ -73,7 +73,7 @@ export function Modal({
           </button>
         </div>
 
-        <div className="mt-4">{children}</div>
+        <div className="mt-4 overflow-y-auto flex-1 pr-1 overscroll-contain">{children}</div>
       </div>
     </div>
   );
