@@ -15,7 +15,7 @@ from app.models.schemas import (
 
 import logging
 from app.core.config import settings
-from app.core.database import port_repo, clean_row, SyncedTable
+from app.core.database import clean_row, SyncedTable
 
 logger = logging.getLogger("naviops.disruptions")
 

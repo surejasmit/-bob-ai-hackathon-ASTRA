@@ -187,7 +187,8 @@ Where:
 
 ## 4. Agentic AI Copilot Architecture & Tooling Matrix
 
-**Bob AI** uses Groq's high-speed LPU infrastructure to run a controlled, stateful tool-calling agent. The agent cannot hallucinate port telemetry because every operational claim requires executing an approved tool against the live repository.
+**Bob Copilot** uses Groq's high-speed LPU infrastructure to run a controlled, stateful tool-calling agent. The agent cannot hallucinate port telemetry because every operational claim requires executing an approved tool against the live repository.
+
 
 ```mermaid
 graph TD

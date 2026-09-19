@@ -37,7 +37,7 @@ from app.services.conversation_repo import (
 
 logger = logging.getLogger("naviops.copilot.conversations.api")
 
-router = APIRouter(prefix="/api/copilot/conversations", tags=["Bob AI – Conversations"])
+router = APIRouter(prefix="/api/copilot/conversations", tags=["Bob Copilot – Conversations"])
 
 
 # ---------------------------------------------------------------------------
