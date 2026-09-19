@@ -41,6 +41,7 @@ export type StatusContext =
   | "disruption"
   | "optimization"
   | "user"
+  | "customer_request"
   | "general";
 
 export interface StatusMeta {
@@ -303,6 +304,53 @@ export function getStatusMeta(
     };
   }
 
+  // --- Customer Arrival Request & Proposal Statuses ---
+  if (
+    s === "alternative_proposed" ||
+    s === "customer_response_required" ||
+    s === "action required"
+  ) {
+    return {
+      label: s === "action required" ? "Action Required" : "Alternative Proposed",
+      badgeClass: "bg-[#E1F0F2] text-[#2F7D8C] border-[#B0D7DE] font-semibold",
+      textColor: "text-[#2F7D8C]",
+      dotColor: "bg-[#2F7D8C]",
+    };
+  }
+
+  if (
+    s === "pending_manager_review" ||
+    s === "changes_requested" ||
+    s === "validating" ||
+    s === "feasibility_check" ||
+    s === "optimization_running" ||
+    s === "changes needed"
+  ) {
+    const labelMap: Record<string, string> = {
+      pending_manager_review: "Pending Review",
+      changes_requested: "Changes Needed",
+      changes_needed: "Changes Needed",
+      validating: "Validating",
+      feasibility_check: "Feasibility Check",
+      optimization_running: "Optimization Running",
+    };
+    return {
+      label: labelMap[s] || rawStatus,
+      badgeClass: "bg-[#FFF4DE] text-[#C58A2B] border-[#F0D49A] font-semibold",
+      textColor: "text-[#C58A2B]",
+      dotColor: "bg-[#C58A2B]",
+    };
+  }
+
+  if (s === "submitted") {
+    return {
+      label: "Submitted",
+      badgeClass: "bg-[#E1EFEC] text-[#004741] border-[#C5DDD9] font-semibold",
+      textColor: "text-[#004741]",
+      dotColor: "bg-[#004741]",
+    };
+  }
+
   // --- Critical / Failed / Unavailable / Offline / Infeasible ---
   if (
     s === "critical" ||
@@ -311,10 +359,13 @@ export function getStatusMeta(
     s === "offline" ||
     s === "blocked" ||
     s === "emergency" ||
-    s === "infeasible"
+    s === "infeasible" ||
+    s === "rejected" ||
+    s === "declined" ||
+    s === "cancelled"
   ) {
     return {
-      label: rawStatus,
+      label: s === "rejected" || s === "declined" ? "Declined" : s === "cancelled" ? "Cancelled" : rawStatus,
       badgeClass: "bg-[#FCE9E8] text-[#B94A48] border-[#F2C4C3] font-semibold",
       textColor: "text-[#B94A48]",
       dotColor: "bg-[#B94A48]",
@@ -421,6 +472,20 @@ export function getUserRoleMeta(role: string): { label: string; badgeClass: stri
     return {
       label: "Operations Staff",
       badgeClass: "bg-[#E1F0F2] text-[#2F7D8C] border-[#B0D7DE] font-semibold",
+      textColor: "text-[#2F7D8C]",
+    };
+  }
+  if (r === "customer_admin") {
+    return {
+      label: "Customer Admin",
+      badgeClass: "bg-[#E1EFEC] text-[#004741] border-[#C5DDD9] font-semibold",
+      textColor: "text-[#004741]",
+    };
+  }
+  if (r === "customer_user") {
+    return {
+      label: "Customer User",
+      badgeClass: "bg-[#E1F0F2] text-[#2F7D8C] border-[#B0D7DE] font-medium",
       textColor: "text-[#2F7D8C]",
     };
   }

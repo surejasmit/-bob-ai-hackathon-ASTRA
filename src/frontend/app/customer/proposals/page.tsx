@@ -9,12 +9,14 @@ import {
   Clock,
   ArrowRight,
   Ship,
-  Calendar,
-  Anchor,
+  SlidersHorizontal,
 } from "lucide-react";
 import { CustomerShell } from "@/components/customer/customer-shell";
 import { customerApi } from "@/lib/customer-api";
 import { ArrivalRequest } from "@/types/customer";
+import { Button } from "@/components/design-system/button";
+import { Badge } from "@/components/design-system/badge";
+import { cn } from "@/lib/utils";
 
 export default function CustomerProposalsPage() {
   const [requests, setRequests] = useState<ArrivalRequest[]>([]);
@@ -34,17 +36,19 @@ export default function CustomerProposalsPage() {
   return (
     <CustomerShell
       title="Alternative Arrival Proposals"
-      subtitle="Review alternative berthing slots recommended by the NaviOps Operation Manager."
+      subtitle="Review alternative berthing slots recommended by the NaviOps Operation Manager to optimize port turnarounds."
     >
-      <div className="space-y-6 max-w-5xl mx-auto">
+      <div className="space-y-5 max-w-5xl mx-auto">
         {loading ? (
-          <div className="py-16 text-center text-[#6D94B5]">Loading proposals...</div>
+          <div className="py-16 text-center text-xs text-[#5C6B68]">
+            Loading proposals...
+          </div>
         ) : requests.length === 0 ? (
-          <div className="p-12 text-center rounded-3xl bg-[#091E2C] border border-[#13344A] text-[#6D94B5]">
-            <GitPullRequest className="h-10 w-10 mx-auto mb-3 text-[#234A66]" />
-            <p className="font-bold text-sm text-white">No Alternative Proposals Pending</p>
-            <p className="text-xs mt-1">
-              When Port Operations suggests an adjusted arrival slot for your vessel, it will appear here.
+          <div className="p-12 text-center rounded-xl border border-dashed border-[#D5DCDA] bg-white text-[#5C6B68]">
+            <GitPullRequest className="h-10 w-10 mx-auto mb-2 text-[#899491]" />
+            <p className="font-semibold text-sm text-[#102A27]">No Alternative Proposals Pending</p>
+            <p className="text-xs text-[#899491] mt-1">
+              When Port Operations suggests an adjusted arrival slot for your vessel, it will appear here for review.
             </p>
           </div>
         ) : (
@@ -54,49 +58,45 @@ export default function CustomerProposalsPage() {
             return (
               <div
                 key={req.id}
-                className={`rounded-3xl bg-[#091E2C] border p-6 sm:p-7 shadow-xl space-y-4 transition-all ${
-                  isPending
-                    ? "border-[#0284C7] bg-gradient-to-br from-[#0C324D] to-[#071926]"
-                    : "border-[#13344A]"
-                }`}
+                className={cn(
+                  "rounded-xl border bg-white p-5 sm:p-6 shadow-card space-y-4 transition-all",
+                  isPending ? "border-[#F0D49A] border-l-4 border-l-[#C58A2B]" : "border-[#E3E5E0]"
+                )}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#13344A]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#F0EDE4]">
                   <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-[#0E3550] text-[#38BDF8]">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#E1F0F2] text-[#2F7D8C]">
                       <Ship className="h-5 w-5" />
                     </div>
                     <div>
-                      <h3 className="font-extrabold text-white text-base">
+                      <h3 className="font-semibold text-[#102A27] text-sm">
                         {req.vessel_name} ({req.request_code})
                       </h3>
-                      <p className="text-xs text-[#7BA1BF]">
-                        Route: {req.origin} &rarr; {req.destination} &bull; {req.cargo_quantity} {req.cargo_type}
+                      <p className="text-[11px] text-[#5C6B68]">
+                        Route: {req.origin} &rarr; {req.destination} &bull; {req.cargo_quantity.toLocaleString()} {req.cargo_type}
                       </p>
                     </div>
                   </div>
 
-                  <span
-                    className={`text-xs font-bold px-3 py-1 rounded-full w-fit ${
-                      prop.customer_response === "ACCEPTED"
-                        ? "bg-[#059669]/20 text-[#34D399] border border-[#059669]/30"
-                        : prop.customer_response === "DECLINED"
-                        ? "bg-[#DC2626]/20 text-[#F87171] border border-[#DC2626]/30"
-                        : "bg-[#0284C7]/20 text-[#38BDF8] border border-[#0284C7]/40 animate-pulse"
-                    }`}
-                  >
-                    {prop.customer_response === "PENDING"
-                      ? "Action Required"
-                      : `Response: ${prop.customer_response}`}
-                  </span>
+                  <Badge
+                    variant="status"
+                    status={
+                      prop.customer_response === "PENDING"
+                        ? "ALTERNATIVE_PROPOSED"
+                        : prop.customer_response === "ACCEPTED"
+                        ? "APPROVED"
+                        : "REJECTED"
+                    }
+                  />
                 </div>
 
                 {/* Comparison Details */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-2xl bg-[#061520] border border-[#13344A]">
-                    <span className="text-[10px] font-bold uppercase text-[#6D94B5] block mb-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3.5 rounded-lg bg-[#F7F6F2] border border-[#E3E5E0]">
+                    <span className="text-[10px] font-bold uppercase text-[#899491] block mb-1">
                       Original Requested Slot
                     </span>
-                    <div className="text-sm font-bold text-white">
+                    <div className="text-sm font-bold text-[#102A27]">
                       {new Date(req.requested_eta).toLocaleString([], {
                         month: "short",
                         day: "numeric",
@@ -105,16 +105,16 @@ export default function CustomerProposalsPage() {
                       })}{" "}
                       UTC
                     </div>
-                    <div className="text-xs text-[#8AB1D1] mt-1">
+                    <div className="text-xs text-[#5C6B68] mt-0.5">
                       Preferred Berth: {req.preferred_berth_code || "Any Available"}
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-[#0A2F4A] border border-[#0284C7]/50">
-                    <span className="text-[10px] font-bold uppercase text-[#38BDF8] block mb-1">
+                  <div className="p-3.5 rounded-lg bg-white border-2 border-[#004741]">
+                    <span className="text-[10px] font-bold uppercase text-[#004741] block mb-1">
                       Port Proposed Slot
                     </span>
-                    <div className="text-sm font-bold text-[#34D399]">
+                    <div className="text-sm font-bold text-[#004741]">
                       {new Date(prop.proposed_eta).toLocaleString([], {
                         month: "short",
                         day: "numeric",
@@ -123,24 +123,26 @@ export default function CustomerProposalsPage() {
                       })}{" "}
                       UTC
                     </div>
-                    <div className="text-xs text-white mt-1">
+                    <div className="text-xs text-[#102A27] mt-0.5">
                       Allocated Berth: <strong>{prop.proposed_berth_code || "Quayside Berth"}</strong>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-[#061520] text-xs text-[#9AC2E2]">
-                  <strong className="text-white">Port Authority Operational Reason: </strong>
+                <div className="p-3 rounded-lg bg-[#F7F9F8] border border-[#E3E5E0] text-xs text-[#5C6B68]">
+                  <strong className="text-[#102A27]">Port Authority Operational Reason: </strong>
                   {prop.operational_reason}
                 </div>
 
                 <div className="pt-2 flex items-center justify-end">
-                  <Link
-                    href={`/customer/arrival-requests/${req.id}`}
-                    className="inline-flex items-center gap-2 text-xs font-bold text-white bg-[#009688] hover:bg-[#007F73] px-4 py-2.5 rounded-xl shadow-md transition-all"
-                  >
-                    <span>Open Tracking &amp; Respond</span>
-                    <ArrowRight className="h-4 w-4" />
+                  <Link href={`/customer/arrival-requests/${req.id}`}>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+                    >
+                      Open Tracking &amp; Respond
+                    </Button>
                   </Link>
                 </div>
               </div>

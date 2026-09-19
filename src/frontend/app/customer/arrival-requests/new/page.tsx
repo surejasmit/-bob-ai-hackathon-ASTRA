@@ -11,18 +11,17 @@ import {
   Anchor,
   Cpu,
   Boxes,
-  ShieldAlert,
-  ArrowRight,
   ArrowLeft,
-  CheckCircle2,
   AlertCircle,
-  HelpCircle,
+  FileText,
 } from "lucide-react";
 import { CustomerShell } from "@/components/customer/customer-shell";
 import { customerApi } from "@/lib/customer-api";
 import { api } from "@/lib/api";
 import { CustomerVessel } from "@/types/customer";
 import { Berth } from "@/types";
+import { Button } from "@/components/design-system/button";
+import { FormField, Input, Select, Textarea } from "@/components/design-system/form-field";
 
 export default function NewArrivalRequestPage() {
   const router = useRouter();
@@ -111,23 +110,20 @@ export default function NewArrivalRequestPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError(null);
-
     if (!selectedVesselId) {
       setFormError("Please select a registered vessel from your fleet.");
       return;
     }
-    if (!requestedEta || !expectedDeparture) {
-      setFormError("Please specify both requested ETA and expected departure.");
-      return;
-    }
+
     if (new Date(expectedDeparture) <= new Date(requestedEta)) {
       setFormError("Expected departure must be after the requested ETA.");
       return;
     }
 
+    setIsSubmitting(true);
+    setFormError(null);
+
     try {
-      setIsSubmitting(true);
       const created = await customerApi.createArrivalRequest({
         vessel_id: selectedVesselId,
         requested_eta: new Date(requestedEta).toISOString(),
@@ -157,80 +153,71 @@ export default function NewArrivalRequestPage() {
     }
   };
 
-  const inputClass =
-    "w-full rounded-xl border border-[#16364D] bg-[#071926] px-3.5 py-2.5 text-xs text-white placeholder:text-[#5E83A1] focus:bg-[#092233] focus:border-[#009688] focus:outline-none focus:ring-1 focus:ring-[#009688] transition-all";
-
   return (
     <CustomerShell
       title="Submit Vessel Arrival Request"
       subtitle="Request a berthing allocation slot. System will automatically run deterministic feasibility and CP-SAT optimization."
       actions={
-        <Link
-          href="/customer/arrival-requests"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-[#8CB4D2] hover:text-white px-3 py-2 rounded-xl bg-[#0E2E44] transition-all"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Back to Requests</span>
+        <Link href="/customer/arrival-requests">
+          <Button variant="secondary" size="sm" leftIcon={<ArrowLeft className="h-3.5 w-3.5" />}>
+            Back to Requests
+          </Button>
         </Link>
       }
     >
       <div className="max-w-4xl mx-auto">
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           {formError && (
-            <div className="p-4 rounded-2xl bg-[#7F1D1D]/30 border border-[#DC2626]/50 text-[#FCA5A5] text-xs font-medium flex items-start gap-2.5">
+            <div className="p-4 rounded-xl bg-[#FCE9E8] border border-[#F2C4C3] text-[#B94A48] text-xs font-medium flex items-start gap-2.5 shadow-2xs">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>{formError}</span>
             </div>
           )}
 
           {/* ── Section 1: Vessel Selection ── */}
-          <div className="rounded-3xl bg-[#091E2C] border border-[#13344A] p-6 shadow-xl space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-[#13344A]">
-              <Ship className="h-4 w-4 text-[#38BDF8]" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white">
+          <div className="rounded-xl border border-[#E3E5E0] bg-white p-6 shadow-card space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-[#F0EDE4]">
+              <Ship className="h-4 w-4 text-[#004741]" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#102A27]">
                 1. Select Vessel from Fleet
               </h3>
             </div>
 
             {vessels.length === 0 ? (
-              <div className="p-4 rounded-xl bg-[#0E2C42] text-xs text-[#8CB4D2]">
+              <div className="p-4 rounded-lg bg-[#F7F6F2] border border-[#E3E5E0] text-xs text-[#5C6B68]">
                 No vessels registered in your fleet.{" "}
-                <Link href="/customer/vessels" className="text-[#38BDF8] font-bold underline">
+                <Link href="/customer/vessels" className="text-[#004741] font-semibold underline">
                   Register a vessel first
                 </Link>
                 .
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                    Vessel Name & IMO *
-                  </label>
-                  <select
+                <FormField label="Vessel Name & IMO" required>
+                  <Select
                     value={selectedVesselId}
                     onChange={(e) => setSelectedVesselId(e.target.value)}
                     required
-                    className={inputClass}
                   >
                     {vessels.map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.vessel_name} ({v.imo_number}) &mdash; {v.length_loa}m LOA
                       </option>
                     ))}
-                  </select>
-                </div>
+                  </Select>
+                </FormField>
 
                 {selectedVessel && (
-                  <div className="p-3 rounded-xl bg-[#061520] border border-[#122E42] text-xs space-y-1">
-                    <span className="text-[10px] uppercase font-bold text-[#6D94B5] block">
+                  <div className="p-3 rounded-lg bg-[#F7F9F8] border border-[#E3E5E0] text-xs space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-[#899491] block">
                       Vessel Specifications
                     </span>
-                    <div className="text-white font-medium">
+                    <div className="text-[#102A27] font-medium">
                       LOA: <strong>{selectedVessel.length_loa}m</strong> &bull; Beam:{" "}
                       <strong>{selectedVessel.beam}m</strong> &bull; Draft:{" "}
-                      <strong className="text-[#38BDF8]">{selectedVessel.draft}m</strong>
+                      <strong className="text-[#004741]">{selectedVessel.draft}m</strong>
                     </div>
-                    <div className="text-[11px] text-[#8AB1D1]">
+                    <div className="text-[11px] text-[#5C6B68]">
                       {selectedVessel.vessel_type} &bull; {selectedVessel.deadweight_tonnage.toLocaleString()} DWT &bull; Flag: {selectedVessel.flag}
                     </div>
                   </div>
@@ -239,270 +226,217 @@ export default function NewArrivalRequestPage() {
             )}
           </div>
 
-          {/* ── Section 2: Arrival & Voyage Schedule ── */}
-          <div className="rounded-3xl bg-[#091E2C] border border-[#13344A] p-6 shadow-xl space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-[#13344A]">
-              <Calendar className="h-4 w-4 text-[#2DD4BF]" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                2. Arrival & Voyage Schedule
+          {/* ── Section 2: Voyage & Schedule ── */}
+          <div className="rounded-xl border border-[#E3E5E0] bg-white p-6 shadow-card space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-[#F0EDE4]">
+              <Clock className="h-4 w-4 text-[#004741]" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#102A27]">
+                2. Arrival Schedule & Voyage Details
               </h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                  Requested ETA (Date & Time) *
-                </label>
-                <input
+              <FormField label="Requested ETA (Local) *" required>
+                <Input
                   type="datetime-local"
                   required
                   value={requestedEta}
                   onChange={(e) => handleEtaChange(e.target.value)}
-                  className={inputClass}
                 />
-              </div>
+              </FormField>
 
-              <div>
-                <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                  Expected Departure *
-                </label>
-                <input
+              <FormField label="Expected Departure *" required>
+                <Input
                   type="datetime-local"
                   required
                   value={expectedDeparture}
                   onChange={(e) => handleDepartureChange(e.target.value)}
-                  className={inputClass}
                 />
-              </div>
+              </FormField>
 
-              <div>
-                <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                  Expected Port Stay (Hours)
-                </label>
-                <input
+              <FormField label="Estimated Port Stay (Hours)" required>
+                <Input
                   type="number"
                   step="0.5"
                   min="1"
+                  required
                   value={stayHours}
                   onChange={(e) => setStayHours(parseFloat(e.target.value) || 0)}
-                  className={inputClass}
                 />
-              </div>
+              </FormField>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                  Port of Origin (Last Port of Call) *
-                </label>
-                <input
+              <FormField label="Last Port of Call (Origin) *" required>
+                <Input
                   type="text"
                   required
                   value={origin}
                   onChange={(e) => setOrigin(e.target.value)}
-                  placeholder="e.g. Rotterdam, Netherlands"
-                  className={inputClass}
+                  placeholder="e.g. Rotterdam Port, NL"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                  Next Destination Port *
-                </label>
-                <input
+              </FormField>
+
+              <FormField label="Next Destination Port *" required>
+                <Input
                   type="text"
                   required
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}
-                  placeholder="e.g. Singapore Main Terminal"
-                  className={inputClass}
+                  placeholder="e.g. Singapore Port, SG"
                 />
-              </div>
+              </FormField>
             </div>
           </div>
 
-          {/* ── Section 3: Cargo Manifest & Dangerous Goods ── */}
-          <div className="rounded-3xl bg-[#091E2C] border border-[#13344A] p-6 shadow-xl space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-[#13344A]">
-              <Boxes className="h-4 w-4 text-[#FBBF24]" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                3. Cargo Manifest & Declaration
+          {/* ── Section 3: Cargo Manifest ── */}
+          <div className="rounded-xl border border-[#E3E5E0] bg-white p-6 shadow-card space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-[#F0EDE4]">
+              <Boxes className="h-4 w-4 text-[#004741]" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#102A27]">
+                3. Cargo Manifest & Handling Needs
               </h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                  Cargo Type *
-                </label>
-                <select
+              <FormField label="Cargo Type *" required>
+                <Select
                   value={cargoType}
                   onChange={(e) => setCargoType(e.target.value)}
-                  className={inputClass}
                 >
-                  <option value="Container">Containerized Freight (TEU)</option>
-                  <option value="Bulk">Dry Bulk (Metric Tons)</option>
-                  <option value="Liquid">Liquid Bulk / Tanker (MT)</option>
-                  <option value="Ro-Ro">Roll-on/Roll-off Vehicles</option>
-                  <option value="General Cargo">Breakbulk / Project Cargo</option>
-                </select>
-              </div>
+                  <option value="Container">Container (TEU)</option>
+                  <option value="Dry Bulk">Dry Bulk (MT)</option>
+                  <option value="Liquid Bulk">Liquid Bulk / Crude (MT)</option>
+                  <option value="General Cargo">General Cargo (Packages)</option>
+                  <option value="Ro-Ro / Vehicles">Ro-Ro / Vehicles (Units)</option>
+                  <option value="Reefer / Perishable">Reefer / Perishable</option>
+                </Select>
+              </FormField>
 
-              <div>
-                <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                  Cargo Quantity (TEU / MT) *
-                </label>
-                <input
+              <FormField label="Cargo Quantity (TEU / MT) *" required>
+                <Input
                   type="number"
-                  required
                   min="1"
+                  required
                   value={cargoQuantity}
                   onChange={(e) => setCargoQuantity(parseInt(e.target.value) || 0)}
-                  className={inputClass}
                 />
-              </div>
+              </FormField>
             </div>
 
-            <div className="pt-2">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-white">
+            <div className="pt-1">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#102A27]">
                 <input
                   type="checkbox"
                   checked={hazardousCargo}
                   onChange={(e) => setHazardousCargo(e.target.checked)}
-                  className="h-4 w-4 rounded border-[#16364D] bg-[#071926] text-[#009688]"
+                  className="h-4 w-4 rounded border-[#D5D9D3] text-[#004741] focus:ring-[#004741]"
                 />
-                <span>Consignment includes IMDG Class Hazardous Cargo</span>
+                <span>Shipment contains IMDG declared hazardous cargo</span>
               </label>
             </div>
 
-            {hazardousCargo && (
-              <div>
-                <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                  Dangerous Goods Declaration / IMDG Class Details
-                </label>
-                <input
-                  type="text"
-                  value={specialCargoReqs}
-                  onChange={(e) => setSpecialCargoReqs(e.target.value)}
-                  placeholder="e.g. IMDG Class 3 (Flammable Liquids), UN 1993, segregated stowage required"
-                  className={inputClass}
-                />
-              </div>
-            )}
+            <FormField label="Special Handling / Stowage Requirements">
+              <Textarea
+                rows={2}
+                value={specialCargoReqs}
+                onChange={(e) => setSpecialCargoReqs(e.target.value)}
+                placeholder="e.g. Heavy lift equipment needed, cold-chain reefer plug-in on arrival..."
+              />
+            </FormField>
           </div>
 
-          {/* ── Section 4: Operational Services & Berth Preferences ── */}
-          <div className="rounded-3xl bg-[#091E2C] border border-[#13344A] p-6 shadow-xl space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-[#13344A]">
-              <Anchor className="h-4 w-4 text-[#A78BFA]" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                4. Operational Requirements & Preferred Quayside
+          {/* ── Section 4: Port Services ── */}
+          <div className="rounded-xl border border-[#E3E5E0] bg-white p-6 shadow-card space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-[#F0EDE4]">
+              <Anchor className="h-4 w-4 text-[#004741]" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#102A27]">
+                4. Operational Resource Requirements
               </h3>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                  Preferred Berth (Optional)
-                </label>
-                <select
+              <FormField label="Preferred Berth (Optional)">
+                <Select
                   value={preferredBerthId}
                   onChange={(e) => setPreferredBerthId(e.target.value)}
-                  className={inputClass}
                 >
-                  <option value="">No Preference (Let Optimizer Choose Optimal Slot)</option>
+                  <option value="">No Preference / Optimizer Decides</option>
                   {berths.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {b.berth_code} &mdash; {b.berth_name} (Max LOA: {b.max_vessel_length}m)
+                      {b.berth_code} ({b.berth_name}) &mdash; {b.max_vessel_length}m max length
                     </option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </FormField>
 
-              <div>
-                <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                  Required STS Quayside Cranes
-                </label>
-                <select
+              <FormField label="STS Cranes Allocated">
+                <Input
+                  type="number"
+                  min="0"
+                  max="6"
                   value={requiredCranes}
-                  onChange={(e) => setRequiredCranes(parseInt(e.target.value) || 2)}
-                  className={inputClass}
-                >
-                  <option value={1}>1 STS Crane (Standard)</option>
-                  <option value={2}>2 STS Cranes (Recommended for fast turnaround)</option>
-                  <option value={3}>3 STS Cranes (Heavy Container Line)</option>
-                  <option value={4}>4 STS Cranes (Ultra-Large Container Vessel)</option>
-                </select>
-              </div>
+                  onChange={(e) => setRequiredCranes(parseInt(e.target.value) || 0)}
+                />
+              </FormField>
             </div>
 
-            {/* Marine Escort Checkboxes */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-white p-3 rounded-xl bg-[#071926] border border-[#16364D]">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg border border-[#E3E5E0] bg-[#F7F9F8] text-xs font-medium text-[#102A27]">
                 <input
                   type="checkbox"
                   checked={tugRequired}
                   onChange={(e) => setTugRequired(e.target.checked)}
-                  className="h-4 w-4 text-[#009688]"
+                  className="h-4 w-4 rounded border-[#D5D9D3] text-[#004741] focus:ring-[#004741]"
                 />
-                <span>Harbor Tug Escort</span>
+                <span>Tugboat Assistance</span>
               </label>
 
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-white p-3 rounded-xl bg-[#071926] border border-[#16364D]">
+              <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg border border-[#E3E5E0] bg-[#F7F9F8] text-xs font-medium text-[#102A27]">
                 <input
                   type="checkbox"
                   checked={pilotRequired}
                   onChange={(e) => setPilotRequired(e.target.checked)}
-                  className="h-4 w-4 text-[#009688]"
+                  className="h-4 w-4 rounded border-[#D5D9D3] text-[#004741] focus:ring-[#004741]"
                 />
-                <span>Maritime Pilot Escort</span>
+                <span>Pilotage Service</span>
               </label>
 
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-white p-3 rounded-xl bg-[#071926] border border-[#16364D]">
+              <label className="flex items-center gap-2 cursor-pointer p-3 rounded-lg border border-[#E3E5E0] bg-[#F7F9F8] text-xs font-medium text-[#102A27]">
                 <input
                   type="checkbox"
                   checked={bunkeringRequired}
                   onChange={(e) => setBunkeringRequired(e.target.checked)}
-                  className="h-4 w-4 text-[#009688]"
+                  className="h-4 w-4 rounded border-[#D5D9D3] text-[#004741] focus:ring-[#004741]"
                 />
-                <span>Bunkering Services</span>
+                <span>Bunkering / Fueling</span>
               </label>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-[#8AB1D1] mb-1.5">
-                Special Instructions or Customer Notes
-              </label>
-              <textarea
+            <FormField label="Customer Remarks / Special Instructions">
+              <Textarea
                 rows={2}
                 value={customerNotes}
                 onChange={(e) => setCustomerNotes(e.target.value)}
-                placeholder="e.g. Early discharge requested, urgent transit cargo, priority berth gang needed..."
-                className={inputClass}
+                placeholder="Additional notes for port authority coordinators and shift managers..."
               />
-            </div>
+            </FormField>
           </div>
 
-          {/* ── Submit Pipeline Notice & Button ── */}
-          <div className="p-5 rounded-3xl bg-gradient-to-r from-[#0C324D] to-[#082030] border border-[#1B527A] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="text-xs text-[#9AC2E2]">
-              <div className="font-bold text-white mb-0.5">Automated Pre-Evaluation Notice:</div>
-              Submission automatically evaluates physical constraints and runs the 72-hour CP-SAT optimizer before queuing for Operation Manager approval.
-            </div>
-
-            <button
+          {/* ── Submit Controls ── */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Link href="/customer/arrival-requests">
+              <Button type="button" variant="secondary">
+                Cancel
+              </Button>
+            </Link>
+            <Button
               type="submit"
-              disabled={isSubmitting || vessels.length === 0}
-              className="px-6 py-3.5 rounded-xl bg-[#009688] hover:bg-[#007F73] text-white font-bold text-xs shadow-xl shadow-[#009688]/30 transition-all flex items-center justify-center gap-2 shrink-0 hover:scale-105"
+              variant="primary"
+              isLoading={isSubmitting}
             >
-              {isSubmitting ? (
-                <span>Evaluating Pipeline...</span>
-              ) : (
-                <>
-                  <span>Submit Arrival Request</span>
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </button>
+              Submit Arrival Request
+            </Button>
           </div>
         </form>
       </div>

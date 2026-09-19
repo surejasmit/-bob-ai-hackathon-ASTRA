@@ -11,13 +11,9 @@ import {
   Clock,
   AlertTriangle,
   ArrowRight,
-  ExternalLink,
   ChevronRight,
-  Sparkles,
   Building2,
-  Calendar,
-  Anchor,
-  Compass,
+  SlidersHorizontal,
 } from "lucide-react";
 import { CustomerShell } from "@/components/customer/customer-shell";
 import { customerApi, getCachedCustomerSession } from "@/lib/customer-api";
@@ -26,6 +22,8 @@ import {
   ArrivalRequest,
   CustomerOrganization,
 } from "@/types/customer";
+import { Badge } from "@/components/design-system/badge";
+import { Button } from "@/components/design-system/button";
 
 export default function CustomerDashboardPage() {
   const [vessels, setVessels] = useState<CustomerVessel[]>([]);
@@ -62,250 +60,224 @@ export default function CustomerDashboardPage() {
     (r) => r.status === "ALTERNATIVE_PROPOSED" || r.status === "CUSTOMER_RESPONSE_REQUIRED"
   );
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "APPROVED":
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#059669]/20 text-[#34D399] border border-[#059669]/30">
-            <CheckCircle2 className="h-3 w-3" /> Approved
-          </span>
-        );
-      case "ALTERNATIVE_PROPOSED":
-      case "CUSTOMER_RESPONSE_REQUIRED":
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#0284C7]/20 text-[#38BDF8] border border-[#0284C7]/30 animate-pulse">
-            <GitPullRequest className="h-3 w-3" /> Alternative Proposed
-          </span>
-        );
-      case "PENDING_MANAGER_REVIEW":
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#D97706]/20 text-[#FBBF24] border border-[#D97706]/30">
-            <Clock className="h-3 w-3" /> Under Review
-          </span>
-        );
-      case "CHANGES_REQUESTED":
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#EA580C]/20 text-[#FB923C] border border-[#EA580C]/30">
-            <AlertTriangle className="h-3 w-3" /> Changes Needed
-          </span>
-        );
-      case "REJECTED":
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#DC2626]/20 text-[#F87171] border border-[#DC2626]/30">
-            Declined
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded bg-[#16364D] text-[#8CB4D2]">
-            {status}
-          </span>
-        );
-    }
-  };
-
   return (
     <CustomerShell
       title="Customer Operations Dashboard"
       subtitle="Fleet status, active vessel arrival requests, and port schedule negotiations."
       actions={
-        <Link
-          href="/customer/arrival-requests/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#009688] hover:bg-[#007F73] text-white font-bold text-xs shadow-lg shadow-[#009688]/25 transition-all hover:scale-105"
-        >
-          <PlusCircle className="h-4 w-4" />
-          <span>New Arrival Request</span>
+        <Link href="/customer/arrival-requests/new">
+          <Button variant="primary" size="sm" leftIcon={<PlusCircle className="h-3.5 w-3.5" />}>
+            New Arrival Request
+          </Button>
         </Link>
       }
     >
-      <div className="space-y-6">
-        {/* ── Organization Welcome Banner ── */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0E2E44] via-[#0A2438] to-[#071926] border border-[#174666] p-6 sm:p-8 shadow-xl">
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+      <div className="space-y-5">
+        {/* ── Organization Welcome Card ── */}
+        <div className="rounded-xl border border-[#E3E5E0] bg-white p-6 shadow-card">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
             <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#009688]/20 border border-[#009688]/40 text-[#2DD4BF] text-xs font-semibold">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#E1EFEC] border border-[#C5DDD9] text-[#004741] text-xs font-semibold">
                 <Building2 className="h-3.5 w-3.5" />
-                <span>Verified Shipping Organization</span>
+                <span>Verified Carrier Organization</span>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#102A27]">
                 {org?.name || "ABC Shipping Pvt. Ltd."}
               </h2>
-              <p className="text-xs sm:text-sm text-[#8CB4D2] max-w-xl leading-relaxed">
+              <p className="text-xs sm:text-sm text-[#5C6B68] max-w-2xl leading-relaxed">
                 Coordinating berthing schedules and operational turnaround with NaviOps Port Authority.
-                All requests pass automated feasibility analysis before final Operation Manager review.
+                All arrival requests pass automated feasibility analysis before final Operation Manager review.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href="/customer/vessels"
-                className="px-4 py-2.5 rounded-xl bg-[#0F3550] hover:bg-[#16476B] text-white text-xs font-bold border border-[#1E5279] transition-all flex items-center gap-2"
-              >
-                <Ship className="h-4 w-4 text-[#38BDF8]" />
-                <span>Manage Fleet</span>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Link href="/customer/vessels">
+                <Button variant="secondary" size="sm" leftIcon={<Ship className="h-3.5 w-3.5" />}>
+                  Manage Fleet
+                </Button>
               </Link>
-              <Link
-                href="/customer/arrival-requests/new"
-                className="px-4 py-2.5 rounded-xl bg-[#009688] hover:bg-[#007F73] text-white text-xs font-bold shadow-lg shadow-[#009688]/30 transition-all flex items-center gap-2"
-              >
-                <PlusCircle className="h-4 w-4" />
-                <span>Submit Request</span>
+              <Link href="/customer/arrival-requests/new">
+                <Button variant="primary" size="sm" leftIcon={<PlusCircle className="h-3.5 w-3.5" />}>
+                  Submit Request
+                </Button>
               </Link>
             </div>
           </div>
         </div>
 
-        {/* ── KPI Stat Cards ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* ── Summary KPI Cards ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Registered Vessels */}
           <Link
             href="/customer/vessels"
-            className="rounded-2xl bg-[#091E2C] border border-[#13344A] p-5 hover:border-[#009688]/60 transition-all group shadow-md"
+            className="rounded-xl border border-[#E3E5E0] bg-white p-4 shadow-card border-l-4 border-l-[#2F7D8C] hover:shadow-card-hover transition-shadow block"
           >
-            <div className="flex items-center justify-between text-[#7EA6C7] mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider">My Vessels</span>
-              <div className="p-2 rounded-xl bg-[#0F324A] text-[#38BDF8] group-hover:scale-110 transition-transform">
-                <Ship className="h-4 w-4" />
+            <div className="flex items-center justify-between text-xs text-[#5C6B68]">
+              <span className="font-semibold uppercase tracking-wider text-[10px]">My Vessels</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#E1F0F2] text-[#2F7D8C]">
+                <Ship className="h-3.5 w-3.5" />
               </div>
             </div>
-            <div className="text-3xl font-extrabold text-white">
-              {loading ? "..." : vessels.length}
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold font-mono text-[#102A27]">
+                {loading ? "..." : vessels.length}
+              </span>
+              <span className="text-xs text-[#5C6B68]">registered in fleet</span>
             </div>
-            <p className="text-[11px] text-[#6D94B5] mt-1">Registered in company fleet</p>
           </Link>
 
+          {/* Pending Decision */}
           <Link
             href="/customer/arrival-requests"
-            className="rounded-2xl bg-[#091E2C] border border-[#13344A] p-5 hover:border-[#FBBF24]/60 transition-all group shadow-md"
+            className="rounded-xl border border-[#E3E5E0] bg-white p-4 shadow-card border-l-4 border-l-[#004741] hover:shadow-card-hover transition-shadow block"
           >
-            <div className="flex items-center justify-between text-[#7EA6C7] mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider">Pending Requests</span>
-              <div className="p-2 rounded-xl bg-[#3D2C0C] text-[#FBBF24] group-hover:scale-110 transition-transform">
-                <Clock className="h-4 w-4" />
+            <div className="flex items-center justify-between text-xs text-[#5C6B68]">
+              <span className="font-semibold uppercase tracking-wider text-[10px]">Pending Review</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#E1EFEC] text-[#004741]">
+                <Clock className="h-3.5 w-3.5" />
               </div>
             </div>
-            <div className="text-3xl font-extrabold text-white">
-              {loading ? "..." : pendingRequests.length}
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold font-mono text-[#004741]">
+                {loading ? "..." : pendingRequests.length}
+              </span>
+              <span className="text-xs text-[#5C6B68]">under port evaluation</span>
             </div>
-            <p className="text-[11px] text-[#6D94B5] mt-1">Under port manager review</p>
           </Link>
 
+          {/* Alternative Proposed */}
           <Link
             href="/customer/proposals"
-            className="rounded-2xl bg-[#091E2C] border border-[#13344A] p-5 hover:border-[#38BDF8]/60 transition-all group shadow-md"
+            className="rounded-xl border border-[#E3E5E0] bg-white p-4 shadow-card border-l-4 border-l-[#C58A2B] hover:shadow-card-hover transition-shadow block"
           >
-            <div className="flex items-center justify-between text-[#7EA6C7] mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider">Alternative Proposals</span>
-              <div className="p-2 rounded-xl bg-[#0C2E47] text-[#38BDF8] group-hover:scale-110 transition-transform">
-                <GitPullRequest className="h-4 w-4" />
+            <div className="flex items-center justify-between text-xs text-[#5C6B68]">
+              <span className="font-semibold uppercase tracking-wider text-[10px]">Alternative Proposed</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#FFF4DE] text-[#C58A2B]">
+                <GitPullRequest className="h-3.5 w-3.5" />
               </div>
             </div>
-            <div className="text-3xl font-extrabold text-white">
-              {loading ? "..." : alternativeProposals.length}
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold font-mono text-[#C58A2B]">
+                {loading ? "..." : alternativeProposals.length}
+              </span>
+              <span className="text-xs text-[#5C6B68]">response required</span>
             </div>
-            <p className="text-[11px] text-[#6D94B5] mt-1">Port proposed new arrival slot</p>
           </Link>
 
+          {/* Approved & Scheduled */}
           <Link
             href="/customer/arrival-requests"
-            className="rounded-2xl bg-[#091E2C] border border-[#13344A] p-5 hover:border-[#34D399]/60 transition-all group shadow-md"
+            className="rounded-xl border border-[#E3E5E0] bg-white p-4 shadow-card border-l-4 border-l-[#2F7D5B] hover:shadow-card-hover transition-shadow block"
           >
-            <div className="flex items-center justify-between text-[#7EA6C7] mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider">Approved Requests</span>
-              <div className="p-2 rounded-xl bg-[#093526] text-[#34D399] group-hover:scale-110 transition-transform">
-                <CheckCircle2 className="h-4 w-4" />
+            <div className="flex items-center justify-between text-xs text-[#5C6B68]">
+              <span className="font-semibold uppercase tracking-wider text-[10px]">Approved & Scheduled</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#E5F2EA] text-[#2F7D5B]">
+                <CheckCircle2 className="h-3.5 w-3.5" />
               </div>
             </div>
-            <div className="text-3xl font-extrabold text-white">
-              {loading ? "..." : approvedRequests.length}
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-bold font-mono text-[#2F7D5B]">
+                {loading ? "..." : approvedRequests.length}
+              </span>
+              <span className="text-xs text-[#5C6B68]">committed to quayside</span>
             </div>
-            <p className="text-[11px] text-[#6D94B5] mt-1">Confirmed in live port schedule</p>
           </Link>
         </div>
 
-        {/* ── Active Alternative Action Banner (if any) ── */}
+        {/* ── Active Alternative Proposal Alert (if any) ── */}
         {alternativeProposals.length > 0 && (
-          <div className="p-5 rounded-2xl bg-gradient-to-r from-[#0C324D] to-[#082030] border border-[#0284C7]/50 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="rounded-xl border border-[#F0D49A] bg-[#FFF4DE] p-4 text-[#C58A2B] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-xl bg-[#0284C7]/30 text-[#38BDF8] mt-0.5">
-                <GitPullRequest className="h-5 w-5" />
+              <div className="p-2 rounded-lg bg-white/80 text-[#C58A2B] mt-0.5">
+                <SlidersHorizontal className="h-4 w-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white">
-                  Alternative Arrival Proposed for {alternativeProposals[0].vessel_name} ({alternativeProposals[0].request_code})
+                <h3 className="text-xs font-bold text-[#102A27]">
+                  Alternative Schedule Proposed for {alternativeProposals[0].vessel_name} ({alternativeProposals[0].request_code})
                 </h3>
-                <p className="text-xs text-[#90B7D6] mt-0.5">
-                  The Port Authority has evaluated your request and proposed an optimal alternative berthing slot.
+                <p className="text-xs text-[#5C6B68] mt-0.5">
+                  The Operation Manager has evaluated your request and proposed an adjusted arrival window.
                 </p>
               </div>
             </div>
-            <Link
-              href={`/customer/arrival-requests/${alternativeProposals[0].id}`}
-              className="px-4 py-2.5 rounded-xl bg-[#0284C7] hover:bg-[#0369A1] text-white text-xs font-bold shrink-0 flex items-center justify-center gap-2 shadow-md transition-all"
-            >
-              <span>Review Proposal</span>
-              <ArrowRight className="h-4 w-4" />
+            <Link href={`/customer/arrival-requests/${alternativeProposals[0].id}`}>
+              <Button variant="primary" size="sm" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
+                Review Proposal
+              </Button>
             </Link>
           </div>
         )}
 
         {/* ── Recent Arrival Requests Table ── */}
-        <div className="rounded-3xl bg-[#091E2C]/90 border border-[#13344A] p-6 shadow-xl backdrop-blur-sm">
-          <div className="flex items-center justify-between pb-4 border-b border-[#13344A] mb-4">
+        <div className="rounded-xl border border-[#E3E5E0] bg-white shadow-card overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-[#E3E5E0] bg-[#F7F9F8]">
             <div>
-              <h3 className="text-base font-bold text-white">Active Arrival Requests</h3>
-              <p className="text-xs text-[#7BA1BF] mt-0.5">
-                Track real-time evaluation status and Operation Manager decisions.
+              <h3 className="text-sm font-semibold text-[#102A27]">Recent Arrival Requests</h3>
+              <p className="text-[11px] text-[#5C6B68] mt-0.5">
+                Track real-time evaluation status, solver recommendations, and operational decisions.
               </p>
             </div>
             <Link
               href="/customer/arrival-requests"
-              className="text-xs font-bold text-[#38BDF8] hover:text-[#7DD3FC] flex items-center gap-1"
+              className="text-xs font-semibold text-[#004741] hover:underline inline-flex items-center gap-1"
             >
               <span>View All</span>
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3.5 w-3.5" />
             </Link>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="text-[#6D94B5] uppercase tracking-wider font-bold border-b border-[#13344A]">
-                  <th className="py-3 px-3">Request Code</th>
-                  <th className="py-3 px-3">Vessel</th>
-                  <th className="py-3 px-3">Requested ETA</th>
-                  <th className="py-3 px-3">Cargo</th>
-                  <th className="py-3 px-3">Feasibility</th>
-                  <th className="py-3 px-3">Status</th>
-                  <th className="py-3 px-3 text-right">Action</th>
+                <tr className="border-b border-[#E3E5E0] bg-[#F7F9F8] text-[11px] font-semibold uppercase tracking-wider text-[#5C6B68]">
+                  <th className="px-4 py-3">Request Code</th>
+                  <th className="px-4 py-3">Vessel</th>
+                  <th className="px-4 py-3">Requested ETA</th>
+                  <th className="px-4 py-3">Cargo Spec</th>
+                  <th className="px-4 py-3">Feasibility</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#13344A]/60">
-                {requests.length === 0 ? (
+              <tbody className="divide-y divide-[#E3E5E0] bg-white">
+                {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-[#6D94B5]">
+                    <td colSpan={7} className="py-12 text-center text-xs text-[#5C6B68]">
+                      Loading arrival requests...
+                    </td>
+                  </tr>
+                ) : requests.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-xs text-[#5C6B68]">
                       No arrival requests submitted yet. Click "New Arrival Request" to get started.
                     </td>
                   </tr>
                 ) : (
-                  requests.slice(0, 5).map((req) => (
-                    <tr key={req.id} className="hover:bg-[#0E2E44]/50 transition-colors">
-                      <td className="py-3.5 px-3 font-mono font-bold text-white">
-                        {req.request_code}
+                  requests.slice(0, 6).map((req) => (
+                    <tr key={req.id} className="hover:bg-[#F7F9F8] transition-colors">
+                      <td className="px-4 py-3 font-mono font-semibold text-[#102A27]">
+                        <Link
+                          href={`/customer/arrival-requests/${req.id}`}
+                          className="hover:text-[#004741] hover:underline"
+                        >
+                          {req.request_code}
+                        </Link>
                       </td>
-                      <td className="py-3.5 px-3">
-                        <div className="font-semibold text-white">{req.vessel_name}</div>
-                        <div className="text-[10px] text-[#6D94B5]">
-                          {req.vessel_imo || "IMO Verified"} &bull; {req.vessel_loa || 320}m
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-[#102A27]">{req.vessel_name}</div>
+                        <div className="text-[10px] text-[#899491]">
+                          {req.vessel_imo || "IMO Verified"} &bull; {req.vessel_loa || 300}m LOA
                         </div>
                       </td>
-                      <td className="py-3.5 px-3 text-[#A5C7E2]">
-                        <div className="font-medium">
+                      <td className="px-4 py-3 text-[#102A27]">
+                        <div>
                           {new Date(req.requested_eta).toLocaleDateString([], {
                             month: "short",
                             day: "numeric",
+                            year: "numeric",
                           })}
                         </div>
-                        <div className="text-[10px] text-[#6D94B5]">
+                        <div className="text-[10px] text-[#899491]">
                           {new Date(req.requested_eta).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -313,30 +285,38 @@ export default function CustomerDashboardPage() {
                           UTC
                         </div>
                       </td>
-                      <td className="py-3.5 px-3">
-                        <span className="font-medium text-white">{req.cargo_type}</span>
-                        <div className="text-[10px] text-[#6D94B5]">
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-[#102A27]">{req.cargo_type}</span>
+                        <div className="text-[10px] text-[#899491]">
                           {req.cargo_quantity.toLocaleString()} units
                         </div>
                       </td>
-                      <td className="py-3.5 px-3">
-                        <span
-                          className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            req.feasibility_status === "PASS"
-                              ? "bg-[#059669]/20 text-[#34D399]"
-                              : req.feasibility_status === "WARN"
-                              ? "bg-[#D97706]/20 text-[#FBBF24]"
-                              : "bg-[#DC2626]/20 text-[#F87171]"
-                          }`}
-                        >
-                          {req.feasibility_status || "EVALUATING"}
-                        </span>
+                      <td className="px-4 py-3">
+                        {req.feasibility_status === "PASS" ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-[#E5F2EA] px-2 py-0.5 text-[11px] font-semibold text-[#2F7D5B]">
+                            <CheckCircle2 className="h-3 w-3" /> Feasible
+                          </span>
+                        ) : req.feasibility_status === "FAIL" ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-[#FCE9E8] px-2 py-0.5 text-[11px] font-semibold text-[#B94A48]">
+                            <AlertTriangle className="h-3 w-3" /> Incompatible
+                          </span>
+                        ) : req.feasibility_status === "WARN" ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-[#FFF4DE] px-2 py-0.5 text-[11px] font-semibold text-[#C58A2B]">
+                            <AlertTriangle className="h-3 w-3" /> Soft Warnings
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded bg-[#F7F6F2] px-2 py-0.5 text-[11px] text-[#899491]">
+                            Evaluating...
+                          </span>
+                        )}
                       </td>
-                      <td className="py-3.5 px-3">{getStatusBadge(req.status)}</td>
-                      <td className="py-3.5 px-3 text-right">
+                      <td className="px-4 py-3">
+                        <Badge variant="status" status={req.status} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
                         <Link
                           href={`/customer/arrival-requests/${req.id}`}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-[#38BDF8] hover:text-white px-2.5 py-1 rounded-lg bg-[#0E3550] hover:bg-[#14476B] transition-all"
+                          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold text-[#004741] bg-[#E1EFEC] hover:bg-[#004741] hover:text-white transition-colors"
                         >
                           <span>Track</span>
                           <ArrowRight className="h-3 w-3" />
