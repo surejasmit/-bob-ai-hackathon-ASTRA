@@ -6,7 +6,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
-from app.core.database import port_repo, _load_users_sqlite
+from app.core.database import port_repo
 from app.core.auth import create_access_token
 
 client = TestClient(app)
@@ -105,11 +105,11 @@ def test_admin_creates_user_and_persists_to_database():
     assert len(matched) == 1
     assert matched[0]["role"] == "operations"
 
-    # Verify user is persisted in SQLite database
-    sqlite_users = _load_users_sqlite()
-    sqlite_matched = [u for u in sqlite_users if u["email"] == new_email]
-    assert len(sqlite_matched) == 1
-    assert sqlite_matched[0]["role"] == "operations"
+    # Verify user is persisted in database
+    port_repo.refresh_users_from_db()
+    db_matched = [u for u in port_repo.users.values() if u["email"] == new_email]
+    assert len(db_matched) == 1
+    assert db_matched[0]["role"] == "operations"
 
     # Verify the newly created user can log in with their email and password
     login_res = client.post("/api/auth/login", json={
@@ -154,11 +154,11 @@ def test_admin_updates_user_role():
     assert update_res.status_code == 200
     assert update_res.json()["role"] == "operations"
 
-    # Verify SQLite database reflects updated role
-    sqlite_users = _load_users_sqlite()
-    sqlite_matched = [u for u in sqlite_users if u["id"] == user_id]
-    assert len(sqlite_matched) == 1
-    assert sqlite_matched[0]["role"] == "operations"
+    # Verify database reflects updated role
+    port_repo.refresh_users_from_db()
+    db_matched = [u for u in port_repo.users.values() if u["id"] == user_id]
+    assert len(db_matched) == 1
+    assert db_matched[0]["role"] == "operations"
 
 
 def test_delete_user_flow_and_safeguards():
@@ -195,9 +195,9 @@ def test_delete_user_flow_and_safeguards():
     login_res = client.post("/api/auth/login", json={"email": target_email, "password": "password123"})
     assert login_res.status_code == 401
 
-    # 6. User is deleted from SQLite
-    sqlite_users = _load_users_sqlite()
-    assert not any(u["id"] == user_id for u in sqlite_users)
+    # 6. User is deleted from database
+    port_repo.refresh_users_from_db()
+    assert not any(u["id"] == user_id for u in port_repo.users.values())
 
 
 def test_admin_can_update_user_password():

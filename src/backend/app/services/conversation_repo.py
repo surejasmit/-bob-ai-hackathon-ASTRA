@@ -1,18 +1,12 @@
 """
 NaviOps Copilot — Conversation Repository
 
-Handles all database reads and writes for copilot_conversations and copilot_messages.
-Provides dual-backend persistence:
-  1. Primary: PostgreSQL / Supabase connection (when port_repo is connected).
-  2. Persistent Fallback: Local SQLite database (src/backend/data/copilot_conversations.db)
-     ensures conversations and messages are 100% persistent across page refreshes,
-     restarts, and offline / local development.
+Handles all database reads and writes for copilot_conversations and copilot_messages
+backed strictly by Supabase PostgreSQL.
 
 All writes are guarded: ownership is always verified server-side using the
 authenticated user's ID.
 """
-import os
-import sqlite3
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -22,12 +16,14 @@ from app.core.database import port_repo, clean_row
 
 logger = logging.getLogger("naviops.copilot.conversations")
 
-SQLITE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
-SQLITE_PATH = os.path.join(SQLITE_DIR, "copilot_conversations.db")
-
 
 class ConversationDBError(Exception):
     """Raised when a database operation on conversation tables fails."""
+
+
+# In-memory fallback used only if Supabase PostgreSQL is completely disconnected during offline tests
+_memory_conversations: Dict[str, Dict[str, Any]] = {}
+_memory_messages: Dict[str, List[Dict[str, Any]]] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -76,67 +72,6 @@ def _pg_conn():
         raise ConversationDBError(f"PostgreSQL connection failed: {exc}") from exc
 
 
-def _init_sqlite_tables(conn: sqlite3.Connection) -> None:
-    """Initialize conversation and message tables in SQLite if they do not exist."""
-    with conn:
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS copilot_conversations (
-                id          TEXT PRIMARY KEY,
-                user_id     TEXT NOT NULL,
-                title       TEXT NOT NULL DEFAULT 'New conversation',
-                created_at  TEXT NOT NULL,
-                updated_at  TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_copilot_conversations_user_id
-                ON copilot_conversations(user_id);
-            CREATE INDEX IF NOT EXISTS idx_copilot_conversations_updated_at
-                ON copilot_conversations(updated_at DESC);
-
-            CREATE TABLE IF NOT EXISTS copilot_messages (
-                id              TEXT PRIMARY KEY,
-                conversation_id TEXT NOT NULL REFERENCES copilot_conversations(id) ON DELETE CASCADE,
-                role            TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
-                content         TEXT NOT NULL,
-                created_at      TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_copilot_messages_conversation_id
-                ON copilot_messages(conversation_id);
-            CREATE INDEX IF NOT EXISTS idx_copilot_messages_created_at
-                ON copilot_messages(conversation_id, created_at ASC);
-        """)
-
-
-_sqlite_initialized = False
-
-
-def _sqlite_conn() -> sqlite3.Connection:
-    """Return a thread-safe connection to the persistent SQLite database."""
-    global _sqlite_initialized
-    try:
-        os.makedirs(SQLITE_DIR, exist_ok=True)
-        conn = sqlite3.connect(SQLITE_PATH, timeout=10.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
-        if not _sqlite_initialized:
-            _init_sqlite_tables(conn)
-            _sqlite_initialized = True
-        return conn
-    except Exception as exc:
-        logger.error("Failed to connect to SQLite fallback: %s", exc)
-        raise ConversationDBError(f"SQLite connection failed: {exc}") from exc
-
-
-# Bootstrap SQLite tables immediately on module load
-try:
-    os.makedirs(SQLITE_DIR, exist_ok=True)
-    with sqlite3.connect(SQLITE_PATH, timeout=5.0) as _bootstrap_conn:
-        _bootstrap_conn.execute("PRAGMA foreign_keys = ON;")
-        _init_sqlite_tables(_bootstrap_conn)
-        _sqlite_initialized = True
-except Exception as _bootstrap_exc:
-    logger.debug("Deferred SQLite table bootstrap: %s", _bootstrap_exc)
-
-
 def _generate_title(first_message: str) -> str:
     """
     Derive a short, safe title from the user's first message.
@@ -158,14 +93,13 @@ def _generate_title(first_message: str) -> str:
 
 def create_conversation(user_id: str, title: str = "New conversation") -> Dict[str, Any]:
     """
-    Insert a new copilot_conversations row for the given user.
+    Insert a new copilot_conversations row for the given user in Supabase PostgreSQL.
     Returns the created row as a dict.
     """
     conv_id = str(uuid.uuid4())
     now = _now()
     safe_title = (title or "New conversation").strip()[:200] or "New conversation"
 
-    # Try PostgreSQL first if connected
     if _is_pg_available():
         try:
             conn = _pg_conn()
@@ -177,34 +111,25 @@ def create_conversation(user_id: str, title: str = "New conversation") -> Dict[s
                     RETURNING id, user_id, title, created_at, updated_at
                     """,
                     (conv_id, user_id, safe_title, now, now),
+                    prepare=False
                 )
                 row = cur.fetchone()
                 return clean_row(dict(row))
         except Exception as exc:
-            logger.warning("PostgreSQL create_conversation failed (%s); using SQLite", exc)
+            logger.error("PostgreSQL create_conversation failed: %s", exc)
+            raise ConversationDBError(f"Failed to create conversation: {exc}") from exc
 
-    # SQLite persistent fallback
-    try:
-        conn = _sqlite_conn()
-        with conn:
-            conn.execute(
-                """
-                INSERT INTO copilot_conversations (id, user_id, title, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (conv_id, str(user_id), safe_title, now.isoformat(), now.isoformat()),
-            )
-        conn.close()
-        return {
-            "id": conv_id,
-            "user_id": str(user_id),
-            "title": safe_title,
-            "created_at": now,
-            "updated_at": now,
-        }
-    except Exception as exc:
-        logger.error("create_conversation failed | user=%s | error=%s", user_id, exc)
-        raise ConversationDBError(f"Failed to create conversation: {exc}") from exc
+    # In-memory storage for offline mock
+    conv = {
+        "id": conv_id,
+        "user_id": str(user_id),
+        "title": safe_title,
+        "created_at": now,
+        "updated_at": now,
+    }
+    _memory_conversations[conv_id] = conv
+    _memory_messages[conv_id] = []
+    return conv
 
 
 def get_conversation(conversation_id: str, user_id: str) -> Optional[Dict[str, Any]]:
@@ -223,39 +148,20 @@ def get_conversation(conversation_id: str, user_id: str) -> Optional[Dict[str, A
                     WHERE id = %s AND user_id = %s
                     """,
                     (conversation_id, user_id),
+                    prepare=False
                 )
                 row = cur.fetchone()
                 if row:
                     return clean_row(dict(row))
+                return None
         except Exception as exc:
-            logger.warning("PostgreSQL get_conversation failed (%s); checking SQLite", exc)
+            logger.error("PostgreSQL get_conversation failed: %s", exc)
+            raise ConversationDBError(f"Failed to fetch conversation: {exc}") from exc
 
-    # SQLite persistent fallback
-    try:
-        conn = _sqlite_conn()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT id, user_id, title, created_at, updated_at
-            FROM copilot_conversations
-            WHERE id = ? AND user_id = ?
-            """,
-            (conversation_id, str(user_id)),
-        )
-        row = cur.fetchone()
-        conn.close()
-        if not row:
-            return None
-        return {
-            "id": row["id"],
-            "user_id": row["user_id"],
-            "title": row["title"],
-            "created_at": _parse_dt(row["created_at"]),
-            "updated_at": _parse_dt(row["updated_at"]),
-        }
-    except Exception as exc:
-        logger.error("get_conversation failed | conv=%s | error=%s", conversation_id, exc)
-        raise ConversationDBError(f"Failed to fetch conversation: {exc}") from exc
+    conv = _memory_conversations.get(conversation_id)
+    if conv and conv.get("user_id") == str(user_id):
+        return conv
+    return None
 
 
 def list_conversations(user_id: str, limit: int = 30) -> List[Dict[str, Any]]:
@@ -276,52 +182,28 @@ def list_conversations(user_id: str, limit: int = 30) -> List[Dict[str, Any]]:
                     LIMIT %s
                     """,
                     (user_id, min(limit, 100)),
+                    prepare=False
                 )
                 rows = cur.fetchall()
                 if rows:
                     return [clean_row(dict(r)) for r in rows]
+                return []
         except Exception as exc:
-            logger.warning("PostgreSQL list_conversations failed (%s); checking SQLite", exc)
+            logger.error("PostgreSQL list_conversations failed: %s", exc)
+            raise ConversationDBError(f"Failed to list conversations: {exc}") from exc
 
-    # SQLite persistent fallback
-    try:
-        conn = _sqlite_conn()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT id, user_id, title, created_at, updated_at
-            FROM copilot_conversations
-            WHERE user_id = ?
-            ORDER BY updated_at DESC
-            LIMIT ?
-            """,
-            (str(user_id), min(limit, 100)),
-        )
-        rows = cur.fetchall()
-        conn.close()
-        return [
-            {
-                "id": r["id"],
-                "user_id": r["user_id"],
-                "title": r["title"],
-                "created_at": _parse_dt(r["created_at"]),
-                "updated_at": _parse_dt(r["updated_at"]),
-            }
-            for r in rows
-        ]
-    except Exception as exc:
-        logger.error("list_conversations failed | user=%s | error=%s", user_id, exc)
-        raise ConversationDBError(f"Failed to list conversations: {exc}") from exc
+    user_convs = [c for c in _memory_conversations.values() if c.get("user_id") == str(user_id)]
+    user_convs.sort(key=lambda x: str(x.get("updated_at", "")), reverse=True)
+    return user_convs[:min(limit, 100)]
 
 
 def update_conversation_title(conversation_id: str, user_id: str, title: str) -> bool:
     """
-    Update the title of a conversation owned by user_id.
+    Update the title of a conversation owned by user_id in Supabase PostgreSQL.
     Returns True on success, False if not found/owned.
     """
     now = _now()
     safe_title = (title or "New conversation").strip()[:200]
-    updated = False
 
     if _is_pg_available():
         try:
@@ -334,31 +216,19 @@ def update_conversation_title(conversation_id: str, user_id: str, title: str) ->
                     WHERE id = %s AND user_id = %s
                     """,
                     (safe_title, now, conversation_id, user_id),
+                    prepare=False
                 )
-                if cur.rowcount > 0:
-                    updated = True
+                return cur.rowcount > 0
         except Exception as exc:
-            logger.warning("PostgreSQL update_conversation_title failed (%s); using SQLite", exc)
+            logger.error("PostgreSQL update_conversation_title failed: %s", exc)
+            raise ConversationDBError(f"Failed to update conversation title: {exc}") from exc
 
-    # Also update SQLite
-    try:
-        conn = _sqlite_conn()
-        with conn:
-            res = conn.execute(
-                """
-                UPDATE copilot_conversations
-                SET title = ?, updated_at = ?
-                WHERE id = ? AND user_id = ?
-                """,
-                (safe_title, now.isoformat(), conversation_id, str(user_id)),
-            )
-            if res.rowcount > 0:
-                updated = True
-        conn.close()
-        return updated
-    except Exception as exc:
-        logger.error("update_conversation_title failed | conv=%s | error=%s", conversation_id, exc)
-        raise ConversationDBError(f"Failed to update conversation title: {exc}") from exc
+    conv = _memory_conversations.get(conversation_id)
+    if conv and conv.get("user_id") == str(user_id):
+        conv["title"] = safe_title
+        conv["updated_at"] = now
+        return True
+    return False
 
 
 def touch_conversation(conversation_id: str) -> None:
@@ -371,30 +241,20 @@ def touch_conversation(conversation_id: str) -> None:
                 cur.execute(
                     "UPDATE copilot_conversations SET updated_at = %s WHERE id = %s",
                     (now, conversation_id),
+                    prepare=False
                 )
         except Exception as exc:
-            logger.debug("PostgreSQL touch_conversation failed (%s)", exc)
+            logger.debug("PostgreSQL touch_conversation failed: %s", exc)
 
-    # SQLite
-    try:
-        conn = _sqlite_conn()
-        with conn:
-            conn.execute(
-                "UPDATE copilot_conversations SET updated_at = ? WHERE id = ?",
-                (now.isoformat(), conversation_id),
-            )
-        conn.close()
-    except Exception as exc:
-        logger.debug("SQLite touch_conversation failed (%s)", exc)
+    if conversation_id in _memory_conversations:
+        _memory_conversations[conversation_id]["updated_at"] = now
 
 
 def delete_conversation(conversation_id: str, user_id: str) -> bool:
     """
-    Delete a conversation and all its messages only if owned by user_id.
+    Delete a conversation and all its messages only if owned by user_id in Supabase PostgreSQL.
     Returns True on success, False if not found/owned.
     """
-    deleted = False
-
     if _is_pg_available():
         try:
             conn = _pg_conn()
@@ -402,28 +262,19 @@ def delete_conversation(conversation_id: str, user_id: str) -> bool:
                 cur.execute(
                     "DELETE FROM copilot_conversations WHERE id = %s AND user_id = %s",
                     (conversation_id, user_id),
+                    prepare=False
                 )
-                if cur.rowcount > 0:
-                    deleted = True
+                return cur.rowcount > 0
         except Exception as exc:
-            logger.warning("PostgreSQL delete_conversation failed (%s); checking SQLite", exc)
+            logger.error("PostgreSQL delete_conversation failed: %s", exc)
+            raise ConversationDBError(f"Failed to delete conversation: {exc}") from exc
 
-    # SQLite
-    try:
-        conn = _sqlite_conn()
-        with conn:
-            conn.execute("DELETE FROM copilot_messages WHERE conversation_id = ?", (conversation_id,))
-            res = conn.execute(
-                "DELETE FROM copilot_conversations WHERE id = ? AND user_id = ?",
-                (conversation_id, str(user_id)),
-            )
-            if res.rowcount > 0:
-                deleted = True
-        conn.close()
-        return deleted
-    except Exception as exc:
-        logger.error("delete_conversation failed | conv=%s | error=%s", conversation_id, exc)
-        raise ConversationDBError(f"Failed to delete conversation: {exc}") from exc
+    conv = _memory_conversations.get(conversation_id)
+    if conv and conv.get("user_id") == str(user_id):
+        del _memory_conversations[conversation_id]
+        _memory_messages.pop(conversation_id, None)
+        return True
+    return False
 
 
 def add_message(
@@ -432,7 +283,7 @@ def add_message(
     content: str,
 ) -> Dict[str, Any]:
     """
-    Insert a single message into copilot_messages.
+    Insert a single message into copilot_messages in Supabase PostgreSQL.
     role must be 'user' or 'assistant'.
     """
     if role not in ("user", "assistant"):
@@ -440,7 +291,6 @@ def add_message(
 
     msg_id = str(uuid.uuid4())
     now = _now()
-    saved = False
 
     if _is_pg_available():
         try:
@@ -453,40 +303,33 @@ def add_message(
                     RETURNING id, conversation_id, role, content, created_at
                     """,
                     (msg_id, conversation_id, role, content, now),
+                    prepare=False
                 )
                 row = cur.fetchone()
                 if row:
-                    saved = True
+                    touch_conversation(conversation_id)
+                    return clean_row(dict(row))
         except Exception as exc:
-            logger.warning("PostgreSQL add_message failed (%s); using SQLite", exc)
+            logger.error("PostgreSQL add_message failed: %s", exc)
+            raise ConversationDBError(f"Failed to save message: {exc}") from exc
 
-    # SQLite persistent fallback
-    try:
-        conn = _sqlite_conn()
-        with conn:
-            conn.execute(
-                """
-                INSERT INTO copilot_messages (id, conversation_id, role, content, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (msg_id, conversation_id, role, content, now.isoformat()),
-            )
-        conn.close()
-        return {
-            "id": msg_id,
-            "conversation_id": conversation_id,
-            "role": role,
-            "content": content,
-            "created_at": now,
-        }
-    except Exception as exc:
-        logger.error("add_message failed | conv=%s | role=%s | error=%s", conversation_id, role, exc)
-        raise ConversationDBError(f"Failed to save message: {exc}") from exc
+    msg = {
+        "id": msg_id,
+        "conversation_id": conversation_id,
+        "role": role,
+        "content": content,
+        "created_at": now,
+    }
+    if conversation_id not in _memory_messages:
+        _memory_messages[conversation_id] = []
+    _memory_messages[conversation_id].append(msg)
+    touch_conversation(conversation_id)
+    return msg
 
 
 def get_messages(conversation_id: str, limit: int = 200) -> List[Dict[str, Any]]:
     """
-    Return messages for a conversation in chronological order.
+    Return messages for a conversation in chronological order from Supabase PostgreSQL.
     """
     if _is_pg_available():
         try:
@@ -501,42 +344,18 @@ def get_messages(conversation_id: str, limit: int = 200) -> List[Dict[str, Any]]
                     LIMIT %s
                     """,
                     (conversation_id, min(limit, 500)),
+                    prepare=False
                 )
                 rows = cur.fetchall()
                 if rows:
                     return [clean_row(dict(r)) for r in rows]
+                return []
         except Exception as exc:
-            logger.warning("PostgreSQL get_messages failed (%s); checking SQLite", exc)
+            logger.error("PostgreSQL get_messages failed: %s", exc)
+            raise ConversationDBError(f"Failed to fetch messages: {exc}") from exc
 
-    # SQLite persistent fallback
-    try:
-        conn = _sqlite_conn()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT id, conversation_id, role, content, created_at
-            FROM copilot_messages
-            WHERE conversation_id = ?
-            ORDER BY created_at ASC
-            LIMIT ?
-            """,
-            (conversation_id, min(limit, 500)),
-        )
-        rows = cur.fetchall()
-        conn.close()
-        return [
-            {
-                "id": r["id"],
-                "conversation_id": r["conversation_id"],
-                "role": r["role"],
-                "content": r["content"],
-                "created_at": _parse_dt(r["created_at"]),
-            }
-            for r in rows
-        ]
-    except Exception as exc:
-        logger.error("get_messages failed | conv=%s | error=%s", conversation_id, exc)
-        raise ConversationDBError(f"Failed to fetch messages: {exc}") from exc
+    msgs = _memory_messages.get(conversation_id, [])
+    return msgs[:min(limit, 500)]
 
 
 def get_history_for_groq(conversation_id: str, max_turns: int = 10) -> List[Dict[str, str]]:
@@ -558,53 +377,25 @@ def get_history_for_groq(conversation_id: str, max_turns: int = 10) -> List[Dict
                     LIMIT %s
                     """,
                     (conversation_id, max_turns * 2),
+                    prepare=False
                 )
                 rows = cur.fetchall()
                 if rows:
                     return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+                return []
         except Exception as exc:
-            logger.debug("PostgreSQL get_history_for_groq failed (%s); checking SQLite", exc)
+            logger.warning("PostgreSQL get_history_for_groq failed (%s)", exc)
+            return []
 
-    # SQLite persistent fallback
-    try:
-        conn = _sqlite_conn()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT role, content
-            FROM copilot_messages
-            WHERE conversation_id = ?
-            ORDER BY created_at DESC
-            LIMIT ?
-            """,
-            (conversation_id, max_turns * 2),
-        )
-        rows = cur.fetchall()
-        conn.close()
-        return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
-    except Exception as exc:
-        logger.warning(
-            "get_history_for_groq failed | conv=%s | error=%s — using empty history",
-            conversation_id, exc,
-        )
-        return []
+    msgs = _memory_messages.get(conversation_id, [])
+    recent = msgs[-(max_turns * 2):]
+    return [{"role": m["role"], "content": m["content"]} for m in recent]
 
 
 def ensure_tables_exist() -> bool:
     """
-    Idempotently create copilot_conversations and copilot_messages tables.
-    Initializes both SQLite and PostgreSQL (if connected). Always ensures
-    storage readiness.
+    Idempotently verify copilot_conversations and copilot_messages tables in Supabase PostgreSQL.
     """
-    # 1. Initialize SQLite storage
-    try:
-        conn = _sqlite_conn()
-        _init_sqlite_tables(conn)
-        conn.close()
-    except Exception as exc:
-        logger.warning("SQLite table init warning: %s", exc)
-
-    # 2. Try PostgreSQL if reachable
     if _is_pg_available():
         try:
             conn = _pg_conn()
@@ -617,36 +408,27 @@ def ensure_tables_exist() -> bool:
                         created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     );
-                """)
-                cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_copilot_conversations_user_id
                         ON copilot_conversations(user_id);
-                """)
-                cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_copilot_conversations_updated_at
                         ON copilot_conversations(updated_at DESC);
-                """)
-                cur.execute("""
+
                     CREATE TABLE IF NOT EXISTS copilot_messages (
-                        id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                        conversation_id     UUID NOT NULL
-                                            REFERENCES copilot_conversations(id) ON DELETE CASCADE,
-                        role                VARCHAR(20) NOT NULL
-                                            CHECK (role IN ('user', 'assistant')),
-                        content             TEXT NOT NULL,
-                        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                        id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                        conversation_id UUID NOT NULL
+                                        REFERENCES copilot_conversations(id) ON DELETE CASCADE,
+                        role            VARCHAR(20) NOT NULL
+                                        CHECK (role IN ('user', 'assistant')),
+                        content         TEXT NOT NULL,
+                        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     );
-                """)
-                cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_copilot_messages_conversation_id
                         ON copilot_messages(conversation_id);
-                """)
-                cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_copilot_messages_created_at
                         ON copilot_messages(conversation_id, created_at ASC);
-                """)
-            logger.info("Copilot PostgreSQL tables verified.")
+                """, prepare=False)
+            logger.info("Copilot PostgreSQL tables verified in Supabase.")
         except Exception as exc:
-            logger.warning("PostgreSQL table init note: %s", exc)
+            logger.warning("PostgreSQL table verification note: %s", exc)
 
     return True

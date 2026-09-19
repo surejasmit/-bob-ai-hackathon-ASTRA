@@ -46,109 +46,6 @@ def clean_row(row: Dict[str, Any]) -> Dict[str, Any]:
     return cleaned
 
 
-import sqlite3
-
-USER_SQLITE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
-USER_SQLITE_PATH = os.environ.get("USER_SQLITE_PATH", os.path.join(USER_SQLITE_DIR, "naviops_users.db"))
-
-
-def _init_user_sqlite():
-    """Ensure naviops_users.db SQLite database and users table exist."""
-    try:
-        os.makedirs(USER_SQLITE_DIR, exist_ok=True)
-        with sqlite3.connect(USER_SQLITE_PATH, timeout=10.0) as conn:
-            conn.execute("PRAGMA foreign_keys = ON;")
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id TEXT PRIMARY KEY,
-                    email TEXT UNIQUE NOT NULL,
-                    full_name TEXT NOT NULL,
-                    role TEXT NOT NULL CHECK (role IN ('admin', 'operations', 'viewer')),
-                    department TEXT DEFAULT 'Port Operations',
-                    password_hash TEXT,
-                    created_at TEXT NOT NULL
-                );
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
-    except Exception as e:
-        logger.error(f"Failed to initialize SQLite users table: {e}")
-
-
-def _load_users_sqlite() -> List[Dict[str, Any]]:
-    """Load all persisted users from SQLite."""
-    try:
-        _init_user_sqlite()
-        with sqlite3.connect(USER_SQLITE_PATH, timeout=10.0) as conn:
-            conn.row_factory = sqlite3.Row
-            cur = conn.execute("SELECT id, email, full_name, role, department, password_hash, created_at FROM users")
-            rows = cur.fetchall()
-            users = []
-            for r in rows:
-                created_at = r["created_at"]
-                if isinstance(created_at, str):
-                    try:
-                        created_at = datetime.fromisoformat(created_at)
-                    except Exception:
-                        created_at = datetime.now(timezone.utc)
-                users.append({
-                    "id": r["id"],
-                    "email": r["email"],
-                    "full_name": r["full_name"],
-                    "role": r["role"],
-                    "department": r["department"],
-                    "password_hash": r["password_hash"],
-                    "created_at": created_at,
-                })
-            return users
-    except Exception as e:
-        logger.error(f"Failed to load users from SQLite: {e}")
-        return []
-
-
-def persist_user_sqlite(user: Dict[str, Any]):
-    """UPSERT a user into the persistent SQLite database."""
-    try:
-        _init_user_sqlite()
-        created_at = user.get("created_at")
-        if isinstance(created_at, datetime):
-            created_at_str = created_at.isoformat()
-        else:
-            created_at_str = str(created_at) if created_at else datetime.now(timezone.utc).isoformat()
-
-        with sqlite3.connect(USER_SQLITE_PATH, timeout=10.0) as conn:
-            conn.execute("""
-                INSERT INTO users (id, email, full_name, role, department, password_hash, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    email = excluded.email,
-                    full_name = excluded.full_name,
-                    role = excluded.role,
-                    department = excluded.department,
-                    password_hash = excluded.password_hash,
-                    created_at = excluded.created_at;
-            """, (
-                str(user["id"]),
-                str(user["email"]).strip().lower(),
-                str(user["full_name"]).strip(),
-                str(user["role"]).strip().lower(),
-                str(user.get("department") or "Port Operations"),
-                user.get("password_hash"),
-                created_at_str,
-            ))
-    except Exception as e:
-        logger.error(f"Failed to persist user to SQLite: {e}")
-
-
-def delete_user_sqlite(user_id: str):
-    """Delete a user from the persistent SQLite database."""
-    try:
-        _init_user_sqlite()
-        with sqlite3.connect(USER_SQLITE_PATH, timeout=10.0) as conn:
-            conn.execute("DELETE FROM users WHERE id = ?", (str(user_id),))
-    except Exception as e:
-        logger.error(f"Failed to delete user from SQLite: {e}")
-
-
 class SyncedTable(dict):
     """
     In-memory dictionary that automatically persists additions and updates
@@ -163,12 +60,6 @@ class SyncedTable(dict):
     def __setitem__(self, key, value):
         old_val = self.get(key)
         super().__setitem__(key, value)
-        if self.table_name == "users":
-            try:
-                persist_user_sqlite(value)
-            except Exception as e:
-                logger.error(f"SQLite user persistence failed: {e}")
-
         if hasattr(self, "repo") and self.repo.is_connected:
             try:
                 self.repo.persist_item(self.table_name, value)
@@ -183,12 +74,6 @@ class SyncedTable(dict):
     def __delitem__(self, key):
         saved = self.get(key)
         super().__delitem__(key)
-        if self.table_name == "users":
-            try:
-                delete_user_sqlite(str(key))
-            except Exception as e:
-                logger.error(f"SQLite user delete failed: {e}")
-
         if hasattr(self, "repo") and self.repo.is_connected:
             try:
                 self.repo.delete_item(self.table_name, key)
@@ -217,20 +102,14 @@ class PortRepository:
         self.schedules = SyncedTable(self, "schedules")
         self.schedule_version: int = 1
 
-        # 1. Preload users from persistent SQLite store if available
-        sqlite_users = _load_users_sqlite()
-        if sqlite_users:
-            for u in sqlite_users:
-                super(SyncedTable, self.users).__setitem__(u["id"], u)
-
-        # 2. Seed fallback in-memory defaults
+        # 1. Seed fallback in-memory defaults
         self.seed_defaults()
 
-        # 3. Sync from live Supabase PostgreSQL
+        # 2. Sync from live Supabase PostgreSQL
         self.connect_and_sync()
 
     def refresh_users_from_db(self):
-        """Ensure in-memory users cache is completely synchronized with persistent store."""
+        """Ensure in-memory users cache is completely synchronized with persistent Supabase store."""
         if self.is_connected or settings.clean_database_url:
             try:
                 conn = self.get_connection()
@@ -242,22 +121,12 @@ class PortRepository:
                             current_ids = {u["id"] for u in db_users}
                             for u in db_users:
                                 super(SyncedTable, self.users).__setitem__(u["id"], u)
-                                persist_user_sqlite(u)
                             for uid in list(self.users.keys()):
                                 if uid not in current_ids:
                                     super(SyncedTable, self.users).__delitem__(uid)
                             return
             except Exception as e:
                 logger.warning(f"Failed to refresh users from PostgreSQL: {e}")
-
-        sqlite_users = _load_users_sqlite()
-        if sqlite_users:
-            current_ids = {u["id"] for u in sqlite_users}
-            for u in sqlite_users:
-                super(SyncedTable, self.users).__setitem__(u["id"], u)
-            for uid in list(self.users.keys()):
-                if uid not in current_ids:
-                    super(SyncedTable, self.users).__delitem__(uid)
 
     def get_connection(self):
         """Get or reuse a persistent connection to PostgreSQL with dict_row factory."""
@@ -303,7 +172,6 @@ class PortRepository:
                         self.users.clear()
                         for u in db_users:
                             super(SyncedTable, self.users).__setitem__(u["id"], u)
-                            persist_user_sqlite(u)
                     else:
                         # If PostgreSQL users table is empty, push existing local users
                         for u in self.users.values():
@@ -597,7 +465,6 @@ class PortRepository:
         if len(self.users) == 0:
             for u in users_seed:
                 super(SyncedTable, self.users).__setitem__(u["id"], u)
-                persist_user_sqlite(u)
 
         # 2. Berths
         berths_seed = [

@@ -1,6 +1,7 @@
 import os
 import sys
 
-# Isolate SQLite user database during tests to protect development database
-_data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
-os.environ["USER_SQLITE_PATH"] = os.path.join(_data_dir, "naviops_users_test.db")
+# Ensure backend root is on sys.path
+_backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _backend_root not in sys.path:
+    sys.path.insert(0, _backend_root)

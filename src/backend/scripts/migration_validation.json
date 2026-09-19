@@ -1,0 +1,42 @@
+{
+  "users": {
+    "sqlite_rows": 73,
+    "supabase_rows": 73,
+    "status": "PASS"
+  },
+  "customer_organizations": {
+    "sqlite_rows": 1,
+    "supabase_rows": 1,
+    "status": "PASS"
+  },
+  "customer_users": {
+    "sqlite_rows": 2,
+    "supabase_rows": 2,
+    "status": "PASS"
+  },
+  "customer_vessels": {
+    "sqlite_rows": 4,
+    "supabase_rows": 4,
+    "status": "PASS"
+  },
+  "arrival_requests": {
+    "sqlite_rows": 1,
+    "supabase_rows": 1,
+    "status": "PASS"
+  },
+  "request_alternative_proposals": {
+    "sqlite_rows": 0,
+    "supabase_rows": 0,
+    "status": "PASS"
+  },
+  "request_audit_logs": {
+    "sqlite_rows": 4,
+    "supabase_rows": 4,
+    "status": "PASS"
+  },
+  "customer_notifications": {
+    "sqlite_rows": 2,
+    "supabase_rows": 2,
+    "status": "PASS"
+  }
+}

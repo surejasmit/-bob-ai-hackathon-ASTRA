@@ -4,11 +4,6 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from fastapi.testclient import TestClient
 
-# Set isolated test databases before importing app
-_test_data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
-os.environ["USER_SQLITE_PATH"] = os.path.join(_test_data_dir, "naviops_users_test.db")
-os.environ["CUSTOMER_SQLITE_PATH"] = os.path.join(_test_data_dir, "naviops_customer_test.db")
-
 from app.main import app
 from app.core.database import port_repo
 from app.customer.database import customer_repo
