@@ -21,6 +21,7 @@ import {
   Trash2,
   Copy,
   Key,
+  RefreshCw,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardHeader, CardTitle, CardContent } from "@/design-system/card";
@@ -754,7 +755,7 @@ export default function UsersPage() {
             setPasswordUpdateError(null);
           }}
           title="Personnel Profile & Operational Credentials"
-          description="View personnel details, manage access credentials, and review live operational privileges."
+          description="View sign-in credentials, manage access passwords, and review live operational privileges."
           maxWidth="md"
         >
           <div className="space-y-4 pt-1">

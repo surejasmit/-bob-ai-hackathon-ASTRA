@@ -22,6 +22,8 @@ import {
   UserCheck,
   Eye,
   Radio,
+  ClipboardCheck,
+  ExternalLink,
 } from "lucide-react";
 import { User, UserRole } from "@/types";
 
@@ -57,6 +59,13 @@ export function Sidebar({ user, onLogout }: SidebarProps) {
       href: "/",
       icon: LayoutDashboard,
       roles: ["admin", "operations", "viewer"],
+    },
+    {
+      name: "Arrival Requests",
+      href: "/operations/vessel-requests",
+      icon: ClipboardCheck,
+      roles: ["admin", "operations"],
+      badge: "Inbound",
     },
     {
       name: "Operations",
@@ -243,7 +252,14 @@ export function Sidebar({ user, onLogout }: SidebarProps) {
                       isActive ? "text-[#004741]" : "text-[#899491] group-hover:text-[#004741]"
                     )}
                   />
-                  <span className="truncate">{item.name}</span>
+                  <div className="flex flex-1 items-center justify-between truncate">
+                    <span className="truncate">{item.name}</span>
+                    {item.badge && (
+                      <span className="rounded bg-[#004741]/10 px-1.5 py-0.5 text-[9px] font-bold text-[#004741]">
+                        {item.badge}
+                      </span>
+                    )}
+                  </div>
                 </Link>
               );
             })}
@@ -284,6 +300,20 @@ export function Sidebar({ user, onLogout }: SidebarProps) {
             </nav>
           </div>
         )}
+      </div>
+
+      {/* Customer Module Switcher */}
+      <div className="px-3 py-2 border-t border-[#E3E5E0] bg-[#F7F9F8]">
+        <Link
+          href="/customer/dashboard"
+          className="flex items-center justify-between rounded-lg border border-[#D5DCDA] bg-white px-2.5 py-1.5 text-xs font-medium text-[#102A27] hover:border-[#004741] hover:text-[#004741] shadow-xs transition-colors group"
+        >
+          <div className="flex items-center gap-2 truncate">
+            <Ship className="h-3.5 w-3.5 text-[#004741]" />
+            <span className="truncate text-[11px] font-semibold">Customer Portal</span>
+          </div>
+          <ExternalLink className="h-3 w-3 text-[#899491] group-hover:text-[#004741]" />
+        </Link>
       </div>
 
       {/* User Footer */}

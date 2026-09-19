@@ -2,7 +2,8 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api import vessels, berths, cranes, yards, disruptions, dashboard, optimization, auth, copilot, conversations, port_twin
+from app.api import vessels, berths, cranes, yards, disruptions, dashboard, optimization, auth, copilot, conversations, port_twin, operations_requests
+from app.customer import router as customer_router
 
 app = FastAPI(
     title="NaviOps API — Port Congestion Prediction & Operations Optimizer",
@@ -73,6 +74,8 @@ app.include_router(optimization.router)
 app.include_router(copilot.router)
 app.include_router(conversations.router)
 app.include_router(port_twin.router)
+app.include_router(operations_requests.router)
+app.include_router(customer_router.router)
 
 
 @app.get("/")

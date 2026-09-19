@@ -215,6 +215,7 @@ class PortRepository:
         self.disruptions = SyncedTable(self, "disruptions")
         self.optimization_runs = SyncedTable(self, "optimization_runs")
         self.schedules = SyncedTable(self, "schedules")
+        self.schedule_version: int = 1
 
         # 1. Preload users from persistent SQLite store if available
         sqlite_users = _load_users_sqlite()
@@ -465,7 +466,7 @@ class PortRepository:
                 ON CONFLICT (id) {update_clause}
             """
             with conn.cursor() as cur:
-                cur.execute(query, values)
+                cur.execute(query, values, prepare=False)
         except Exception as e:
             logger.error(f"Error persisting to {table_name}: {e}")
             raise RuntimeError(f"Database write failed for {table_name}: {e}") from e
@@ -511,7 +512,7 @@ class PortRepository:
                         VALUES ({placeholders})
                         ON CONFLICT (id) {update_clause}
                     """
-                    cur.execute(query, values)
+                    cur.execute(query, values, prepare=False)
         except Exception as e:
             logger.error(f"Error batch persisting to {table_name}: {e}")
             raise RuntimeError(f"Database batch write failed for {table_name}: {e}") from e
@@ -552,6 +553,7 @@ class PortRepository:
         self.disruptions.clear()
         self.optimization_runs.clear()
         self.schedules.clear()
+
         self.seed_defaults()
 
     def seed_defaults(self):

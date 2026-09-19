@@ -23,8 +23,10 @@ import {
   DollarSign,
   Leaf,
   Radio,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PortalSelector } from "@/components/landing/portal-selector";
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -34,6 +36,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showFormulaDetails, setShowFormulaDetails] = useState(false);
+
+  // Dual Domain Access & Portal Selector State
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [hasPortToken, setHasPortToken] = useState(false);
+  const [hasCustomerToken, setHasCustomerToken] = useState(false);
+  const [showSelector, setShowSelector] = useState(false);
 
   const loadData = async () => {
     try {
@@ -57,10 +65,52 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 30_000);
-    return () => clearInterval(interval);
+    if (typeof window !== "undefined") {
+      const portToken = localStorage.getItem("naviops_token");
+      const customerToken = localStorage.getItem("naviops_customer_token");
+      const querySelect = window.location.search.includes("select=1");
+
+      setHasPortToken(Boolean(portToken));
+      setHasCustomerToken(Boolean(customerToken));
+
+      if (querySelect || !portToken) {
+        setShowSelector(true);
+        setLoading(false);
+        setIsAuthChecking(false);
+        return;
+      }
+
+      setIsAuthChecking(false);
+      loadData();
+      const interval = setInterval(loadData, 30_000);
+      return () => clearInterval(interval);
+    }
   }, []);
+
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-[#F4F7F6] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-2 text-xs text-[#5C6B68]">
+          <div className="h-6 w-6 border-2 border-[#004741] border-t-transparent rounded-full animate-spin" />
+          <span>Connecting to NaviOps Maritime OS...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // If user has not signed in as Port Worker, or explicitly chose the workspace selector:
+  if (!hasPortToken || showSelector) {
+    return (
+      <PortalSelector
+        hasPortSession={hasPortToken}
+        hasCustomerSession={hasCustomerToken}
+        onEnterPortDashboard={() => {
+          setShowSelector(false);
+          loadData();
+        }}
+      />
+    );
+  }
 
   const congestion = summary?.congestion;
   const metrics = summary?.metrics;
@@ -230,6 +280,15 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowSelector(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white/90 backdrop-blur-xs px-2.5 py-2 text-xs font-medium text-[#5C6B68] hover:bg-white hover:text-[#102A27] transition-colors shadow-2xs"
+              title="Return to the portal selection screen"
+            >
+              <span>Switch Workspace</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setShowFormulaDetails(!showFormulaDetails)}
